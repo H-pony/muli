@@ -1,0 +1,8 @@
+{
+  "brand": "幕里",
+  "generator": "built-in ImageGen",
+  "master": "muli-mark-source.png",
+  "approvedPreview": "docs/brand/muli/logo-monochrome-preview.png",
+  "prompt": "从用户确认的第三款黑白预览中提取左上方独立标识。严格保持大块圆角幕面、右下小块与中间弧形留白的几何比例；两个实体均为纯黑，其他部分为真实透明；无文字、背景、阴影或额外装饰。以透明PNG导出。",
+  "exports": "scripts/generate-brand-assets.py creates platform raster sizes from the approved PNG without redrawing the mark."
+}

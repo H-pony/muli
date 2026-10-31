@@ -42,21 +42,21 @@ export function LiveEpgPanel({ epgUrl, tvgId }: { epgUrl?: string; tvgId?: strin
       <EmptyState
         variant="plain"
         title="该频道未配置节目单数据（需来源订阅提供 EPG 地址且频道带 tvg-id）"
-        className="!py-4"
+        className="!py-6"
       />
     );
   }
 
   if (epgQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-6">
+      <div className="flex items-center justify-center py-10">
         <Spinner size="sm" />
       </div>
     );
   }
 
   if (epgQuery.isError) {
-    return <ErrorState message="节目单加载失败" onRetry={() => epgQuery.refetch()} className="!py-4" />;
+    return <ErrorState message="节目单加载失败" onRetry={() => epgQuery.refetch()} className="!py-6" />;
   }
 
   const data = epgQuery.data;
@@ -66,59 +66,60 @@ export function LiveEpgPanel({ epgUrl, tvgId }: { epgUrl?: string; tvgId?: strin
   const progress = current ? Math.min(100, Math.max(0, ((now - current.start) / (current.stop - current.start)) * 100)) : 0;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-6">
       {current ? (
-        <div className="bg-card border border-line rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-semibold text-danger bg-danger/10 px-1.5 py-0.5 rounded-full">
+        <div className="min-w-0 rounded-2xl border border-line/50 bg-chip/60 p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-success">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
               正在播出
             </span>
-            <span className="text-[10px] text-faint">
+            <span className="text-[11px] tabular-nums text-faint">
               {fmtTime(current.start)} - {fmtTime(current.stop)}
             </span>
           </div>
           <button
-            className="text-sm font-medium text-content w-full text-left"
+            className="w-full break-words rounded-lg text-left text-base font-semibold tracking-tight text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:text-lg"
             aria-expanded={expandedDesc}
             onClick={() => setExpandedDesc((v) => !v)}
           >
             {current.title}
           </button>
           {current.desc && expandedDesc && (
-            <p className="text-xs text-muted mt-1.5 leading-relaxed animate-fade-in">{current.desc}</p>
+            <p className="mt-3 break-words text-sm leading-relaxed text-muted animate-fade-in">{current.desc}</p>
           )}
           {/* 已播进度条 */}
-          <div className="mt-2.5 h-1 rounded-full bg-chip overflow-hidden">
+          <div className="mt-5 h-1 overflow-hidden rounded-full bg-line">
             <div
               className="h-full bg-accent rounded-full transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="flex justify-between text-[10px] text-faint mt-1">
+          <div className="mt-2 flex justify-between text-[10px] tabular-nums text-faint">
             <span>{fmtTime(current.start)}</span>
             <span>{Math.round(progress)}%</span>
             <span>{fmtTime(current.stop)}</span>
           </div>
         </div>
       ) : (
-        <p className="text-xs text-faint text-center py-2">当前时段暂无节目数据</p>
+        <p className="py-4 text-center text-sm text-faint">当前时段暂无节目数据</p>
       )}
 
       {upcoming.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold text-content mb-1.5">接下来</h4>
-          <ul className="space-y-1">
+          <h4 className="mb-3 text-xs font-medium text-muted">接下来</h4>
+          <ul className="space-y-1.5">
             {upcoming.map((p) => (
               <li
                 key={`${p.start}-${p.title}`}
                 className={cn(
-                  'flex items-center gap-2 text-xs px-2 py-1.5 rounded-md',
+                  'flex min-w-0 items-center gap-4 rounded-xl px-3 py-3 text-[13px]',
                   'text-muted hover:bg-hover transition-colors'
                 )}
                 title={p.desc || p.title}
               >
                 <span className="text-faint tabular-nums shrink-0">{fmtTime(p.start)}</span>
-                <span className="text-content truncate">{p.title}</span>
+                <span className="min-w-0 truncate text-content">{p.title}</span>
               </li>
             ))}
           </ul>

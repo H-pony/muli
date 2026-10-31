@@ -37,12 +37,12 @@ export function useToast(): ToastContextValue {
   return useContext(ToastContext);
 }
 
-// 用实心底色（-solid，深一档）：保证白字对比度达标（普通语义色配白字仅 2-3:1）
+// Keep semantic status colors in a small indicator on a neutral material.
 const TYPE_STYLES: Record<ToastType, string> = {
-  error: 'bg-danger-solid',
-  success: 'bg-success-solid',
-  info: 'bg-info-solid',
-  warning: 'bg-warning-solid',
+  error: 'tv-toast--error',
+  success: 'tv-toast--success',
+  info: 'tv-toast--info',
+  warning: 'tv-toast--warning',
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -78,14 +78,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
+      <div className="tv-toast-stack fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
         {items.map((t) => (
           <div
             key={t.id}
             // 读屏可见：错误用 alert（立即朗读），其余用 status（礼貌播报）
             role={t.type === 'error' ? 'alert' : 'status'}
             className={cn(
-              'px-4 py-2.5 rounded-lg shadow-lg text-white text-sm max-w-md animate-slide-up',
+              'tv-toast px-4 py-2.5 rounded-lg shadow-lg text-content text-sm max-w-md animate-slide-up',
               'flex items-center gap-3 pointer-events-auto',
               TYPE_STYLES[t.type]
             )}

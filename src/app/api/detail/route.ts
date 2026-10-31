@@ -14,7 +14,8 @@ function parseSource(raw: string | null): SourceConfig | null {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw) as SourceConfig;
-    if (!obj || !/^https?:\/\//.test(obj.url || '')) return null;
+    if (!obj || typeof obj.url !== 'string' || !/^https?:\/\//.test(obj.url) ||
+      (obj.detail !== undefined && typeof obj.detail !== 'string')) return null;
     return obj;
   } catch {
     return null;
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   try {
     // 命中 60s 缓存直接返回（仅缓存成功拿到剧集的结果）
     const detailRootForCache = (source.detail || baseUrl || '').replace(/\/+$/, '');
-    const cacheKey = `detail:${source.url}|${detailRootForCache}|${id}`;
+    const cacheKey = `detail:${JSON.stringify([source.key, source.name, source.url, detailRootForCache, id])}`;
     const cached = getCache<VideoDetail>(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
@@ -60,7 +61,7 @@ export async function GET(req: Request) {
 
     // 1) 标准列表接口
     const api = `${source.url.replace(/\/+$/, '')}?ac=videolist&ids=${encodeURIComponent(id)}`;
-    const res = await fetchUpstream(api, { timeoutMs: 10000, headers: cmsRequestHeaders() });
+    const res = await fetchUpstream(api, { timeoutMs: 10000, headers: cmsRequestHeaders(), signal: req.signal });
     if (res.ok) {
       const data = await res.json();
       try {
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
       const detailRes = await fetchUpstream(detailUrl, {
         timeoutMs: 10000,
         headers: { 'User-Agent': cmsRequestHeaders()['User-Agent'] },
+        signal: req.signal,
       });
       if (detailRes.ok) {
         const html = await detailRes.text();

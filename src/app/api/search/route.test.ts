@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { POST } from './route';
 import { SESSION_COOKIE, signSession } from '@/lib/auth';
+import type { SearchResponse, SearchStreamEvent } from '@/lib/types';
 
 /**
  * 聚合搜索接口单测：跨源聚合、同源去重、精确命中置顶、成人内容过滤、
@@ -123,22 +124,133 @@ describe('POST /api/search', () => {
     expect(lines[lines.length - 1].type).toBe('done');
   });
 
-  it('未登录返回 401，未配置密码返回 503', async () => {
-    vi.stubGlobal('fetch', vi.fn());
-    const saved = process.env.PASSWORD;
-    delete process.env.PASSWORD;
-    try {
-      const noPassword = await POST(makeRequest({ wd: 'x', sources: SOURCES }));
-      expect(noPassword.status).toBe(503);
-    } finally {
-      process.env.PASSWORD = saved;
+  it.each([
+    { stream: false, filterAdult: true },
+    { stream: false, filterAdult: false },
+    { stream: true, filterAdult: true },
+    { stream: true, filterAdult: false },
+  ])('按片名屏蔽电影解说，包括分页与缓存（stream=$stream, filterAdult=$filterAdult）', async ({ stream, filterAdult }) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const page = new URL(String(input)).searchParams.get('pg');
+      const list = page === '2' ? [
+        { vod_id: 4, vod_name: '星际穿越 特别版' },
+        { vod_id: 5, vod_name: '星际穿越【电影解说】' },
+        { vod_id: 6, vod_name: '星际电影解说穿越' },
+      ] : [
+        // 分类名称不参与此项屏蔽，片名正常的影片保留。
+        { vod_id: 1, vod_name: '星际穿越', type_name: '电影解说' },
+        { vod_id: 2, vod_name: '电影解说：星际穿越' },
+        { vod_id: 3, vod_name: '电影解说' },
+      ];
+      return new Response(cmsList(list, 2), { headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const source = { ...SOURCES[0], url: `https://cms-a.example.com/title-filter-${stream}-${filterAdult}.php` };
+    const body = { wd: '星际穿越', sources: [source], filterAdult };
+    const expected = ['星际穿越', '星际穿越 特别版'];
+    const assertResult = async (response: Response, streamed: boolean, cached: boolean) => {
+      expect(response.status).toBe(200);
+      if (streamed) {
+        const events = (await response.text()).trim().split('\n').map((line) => JSON.parse(line) as SearchStreamEvent);
+        expect(events.map((event) => event.type)).toEqual(cached ? ['done'] : ['source', 'done']);
+        for (const event of events) expect(event.list.map((item) => item.name)).toEqual(expected);
+      } else {
+        const data = await response.json() as SearchResponse;
+        expect(data.list.map((item) => item.name)).toEqual(expected);
+      }
+    };
+
+    await assertResult(await POST(makeRequest(body, stream)), stream, false);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // 换用另一种响应模式，仍应命中同一份已过滤的缓存。
+    await assertResult(await POST(makeRequest(body, !stream)), !stream, true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])('搜索周星驰时保留正片且相关性回退不会恢复相邻电影解说（stream=%s）', async (stream) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(cmsList([
+      { vod_id: 1, vod_name: '功夫足球' },
+      { vod_id: 2, vod_name: '功夫足球电影解说' },
+      { vod_id: 3, vod_name: '少林足球【电影解说】' },
+      { vod_id: 4, vod_name: '功夫' },
+      { vod_id: 5, vod_name: '功夫【电影解说】' },
+    ]), { headers: { 'Content-Type': 'application/json' } })));
+    const source = { ...SOURCES[0], url: `https://cms-a.example.com/actor-commentary-${stream}.php` };
+    const response = await POST(makeRequest({ wd: '周星驰', sources: [source], filterAdult: false }, stream));
+    expect(response.status).toBe(200);
+    const assertTitles = (list: SearchResponse['list']) => {
+      expect(list.map((item) => item.name).sort()).toEqual(['功夫', '功夫足球']);
+    };
+    if (stream) {
+      const events = (await response.text()).trim().split('\n').map((line) => JSON.parse(line) as SearchStreamEvent);
+      expect(events.map((event) => event.type)).toEqual(['source', 'done']);
+      events.forEach((event) => assertTitles(event.list));
+    } else assertTitles((await response.json() as SearchResponse).list);
+  });
+
+  it.each([false, true])('只有电影解说时返回空结果且不会被相关性回退恢复（stream=%s）', async (stream) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(cmsList([
+      { vod_id: 1, vod_name: '星际穿越【电影解说】' },
+      { vod_id: 2, vod_name: '电影解说：星际穿越' },
+    ]), { headers: { 'Content-Type': 'application/json' } })));
+    const source = { ...SOURCES[0], url: `https://cms-a.example.com/only-commentary-${stream}.php` };
+    const res = await POST(makeRequest({ wd: '星际穿越', sources: [source], filterAdult: false }, stream));
+    expect(res.status).toBe(200);
+    if (stream) {
+      const events = (await res.text()).trim().split('\n').map((line) => JSON.parse(line) as SearchStreamEvent);
+      expect(events.map((event) => event.type)).toEqual(['source', 'done']);
+      for (const event of events) expect(event.list).toEqual([]);
+      const done = events.find((event) => event.type === 'done');
+      expect(done?.failures).toEqual([]);
+    } else {
+      expect(await res.json()).toEqual({ list: [], failures: [] });
     }
+  });
+
+  it('未配置密码时无需 Cookie 即可搜索', async () => {
+    vi.stubEnv('PASSWORD', '');
+    mockUpstream();
+    try {
+      const request = new Request('https://local.test/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wd: '免密码搜索', sources: SOURCES }),
+      });
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const data = await response.json() as SearchResponse;
+      expect(data.list.some((item) => item.sourceKey === 'a')).toBe(true);
+      expect(fetch).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('显式配置密码时仍要求有效会话', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
     const noCookie = new Request('https://local.test/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ wd: 'x', sources: SOURCES }),
     });
-    const unauthorized = await POST(noCookie);
-    expect(unauthorized.status).toBe(401);
+    expect((await POST(noCookie)).status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('搜索请求与来源身份隔离', () => {
+  it.each([null, { wd: 123, sources: SOURCES }, { wd: 'test', sources: [null] }, { wd: 'test', sources: [{ key: 'a', name: 'A', url: 123 }] }])('异常输入返回 400 而不是抛出服务错误：%j', async (body) => {
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(400);
+  });
+
+  it('同地址重导入或改名后返回当前来源身份，不复用旧 key/name', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ list: [{ vod_id: 9, vod_name: '来源身份隔离' }] })));
+    const url = 'https://cms-a.example.com/identity-cache.php';
+    const first = await POST(makeRequest({ wd: '来源身份隔离', sources: [{ key: 'old', name: '旧源', url }] }));
+    expect((await first.json()).list[0]).toMatchObject({ sourceKey: 'old', sourceName: '旧源' });
+    const second = await POST(makeRequest({ wd: '来源身份隔离', sources: [{ key: 'new', name: '新源', url }] }));
+    expect((await second.json()).list[0]).toMatchObject({ sourceKey: 'new', sourceName: '新源' });
   });
 });

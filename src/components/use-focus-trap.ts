@@ -6,6 +6,17 @@ import { useEffect, useRef, type RefObject } from 'react';
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const focusLayers: HTMLElement[] = [];
+export function isTopFocusLayer(panel: HTMLElement | null) {
+  // Child effects can mount before their parent. DOM nesting takes precedence over
+  // registration order so a confirmation always stays above its containing drawer.
+  const top = focusLayers.filter((layer) => layer.isConnected || layer === panel).reduce<HTMLElement | null>(
+    (current, layer) => current && layer.contains(current) ? current : layer,
+    null,
+  );
+  return Boolean(panel && top === panel);
+}
+
 /**
  * 弹窗焦点管理：打开时记忆来源并把焦点移入，Tab 在容器内循环（不逃逸到背景页面），
  * 关闭后归还焦点。Drawer 内联实现了同一套逻辑，此处抽出来供其它弹窗（详情 / 换源）复用。
@@ -21,11 +32,15 @@ export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElemen
     restoreRef.current = document.activeElement as HTMLElement | null;
     const panel = containerRef.current;
     if (panel) {
-      const first = panel.querySelector<HTMLElement>(FOCUSABLE);
-      (first ?? panel).focus();
+      focusLayers.push(panel);
+      const first = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).find((element) => element.getClientRects().length > 0);
+      if (isTopFocusLayer(panel)) (first ?? panel).focus();
     }
     return () => {
-      restoreRef.current?.focus?.();
+      const wasTop = isTopFocusLayer(panel);
+      const index = panel ? focusLayers.indexOf(panel) : -1;
+      if (index >= 0) focusLayers.splice(index, 1);
+      if (wasTop && restoreRef.current?.isConnected) restoreRef.current.focus();
       restoreRef.current = null;
     };
   }, [active, containerRef]);
@@ -35,7 +50,7 @@ export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElemen
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
       const panel = containerRef.current;
-      if (!panel) return;
+      if (!panel || !isTopFocusLayer(panel) || e.defaultPrevented) return;
       const nodes = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
         (el) => el.getClientRects().length > 0 || el === document.activeElement
       );

@@ -22,14 +22,14 @@ import { Icon } from '@/components/icon';
 import { useAuth } from '@/components/auth';
 import { resolveSource, useAppStore } from '@/lib/store';
 import {
-  clearProgress,
+  completeEpisode,
   progressKeyOf,
   saveProgress,
-  updateHistoryProgress,
   upsertHistory,
   db,
 } from '@/lib/db';
 import { cn } from '@/lib/utils';
+import { useWatchReturn } from '@/lib/navigation-hooks';
 
 /**
  * 播放页（唯一入口，替代旧版 watch.html → player.html 跳转链）。
@@ -49,15 +49,20 @@ function WatchContent() {
   const router = useRouter();
   const store = useAppStore();
   const { verified } = useAuth();
+  const returnToPrevious = useWatchReturn(searchParams.toString());
 
-  const sourceKey = searchParams.get('source') || '';
-  const vodId = searchParams.get('id') || '';
-  const directUrl = searchParams.get('url') || '';
+  const rawId = searchParams.get('id') || '';
+  const legacyDirectUrl = /^https?:\/\//.test(rawId) ? rawId : '';
+  const directUrl = searchParams.get('url') || legacyDirectUrl;
+  const sourceKey = searchParams.get('source') || (directUrl ? 'direct' : '');
+  const vodId = legacyDirectUrl ? '' : rawId;
+  const playbackId = vodId || directUrl;
   const titleParam = searchParams.get('title') || '';
   const indexParam = parseInt(searchParams.get('index') || '0', 10) || 0;
 
   const [reversed, setReversed] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
+  const lastPosition = useRef({ key: '', position: 0 });
 
   const source = resolveSource(store, sourceKey, {
     url: searchParams.get('sourceUrl') || undefined,
@@ -66,7 +71,7 @@ function WatchContent() {
 
   // 详情查询：无 id（纯直连链接分享）时跳过
   const detailQuery = useQuery({
-    queryKey: ['detail', sourceKey, vodId, source?.url],
+    queryKey: ['detail', sourceKey, vodId, source?.url, source?.detail],
     queryFn: ({ signal }) => api.detail(vodId, source!, signal),
     enabled: Boolean(source && vodId && verified),
     staleTime: 5 * 60_000,
@@ -86,11 +91,13 @@ function WatchContent() {
 
   const currentIndex = useMemo(() => {
     if (episodes.length > 0) return Math.min(Math.max(indexParam, 0), episodes.length - 1);
-    return indexParam;
+    return Math.max(0, indexParam);
   }, [episodes, indexParam]);
 
   const goEpisode = useCallback(
     (index: number) => {
+      if (index < 0 || index >= episodes.length) return;
+      if (autoNextTimer.current) clearTimeout(autoNextTimer.current);
       const sp = new URLSearchParams(searchParams.toString());
       sp.set('index', String(index));
       sp.set('url', episodes[index] || directUrl);
@@ -102,62 +109,50 @@ function WatchContent() {
 
   // 进度恢复优先级：URL position 参数 > IndexedDB 记录
   const getRestorePosition = useCallback(async () => {
-    const urlPos = parseInt(searchParams.get('position') || '0', 10) || 0;
-    if (urlPos > 0) return urlPos;
-    if (!vodId) return 0;
-    const entry = await db.progress.get(progressKeyOf(sourceKey, vodId, currentIndex));
-    return entry?.position ?? 0;
-  }, [searchParams, sourceKey, vodId, currentIndex]);
+    const urlPos = Number(searchParams.get('position'));
+    if (searchParams.has('position') && Number.isFinite(urlPos) && urlPos >= 0) return urlPos;
+    if (!playbackId) return 0;
+    const entry = await db.progress.get(progressKeyOf(sourceKey, playbackId, currentIndex));
+    if (entry) return entry.position;
+    const history = await db.history.get(`${sourceKey}_${playbackId}`);
+    return history?.episodeIndex === currentIndex ? history.playbackPosition : 0;
+  }, [searchParams, sourceKey, playbackId, currentIndex]);
 
-  // 写入观看历史（进入页面即记录，进度后续增量更新）
-  useEffect(() => {
-    if (!verified || !sourceKey || !currentUrl) return;
-    const timer = setTimeout(() => {
-      upsertHistory({
-        sourceKey,
-        sourceUrl: source?.url,
-        vodId: vodId || currentUrl,
-        title: videoTitle,
-        pic: detailQuery.data?.videoInfo?.cover,
-        episodeIndex: currentIndex,
-        totalEpisodes: episodes.length,
-        playbackPosition: 0,
-        duration: 0,
-        timestamp: Date.now(),
-      }).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verified, sourceKey, vodId, currentIndex, videoTitle, currentUrl]);
-
-  // 播放中与暂停时的进度落盘逻辑一致，共用同一回调
+  // 真实开始播放后才进入历史，加载失败或仅打开页面不会覆盖原续播集数。
   const handleProgress = useCallback(
     (position: number, duration: number) => {
-      if (vodId) {
-        saveProgress(sourceKey, vodId, currentIndex, position, duration).catch(() => {});
-        updateHistoryProgress(sourceKey, vodId || currentUrl, position, duration).catch(() => {});
+      if (!verified || !Number.isFinite(position) || !Number.isFinite(duration) || position < 1 || duration <= 0) return;
+      lastPosition.current = { key: `${sourceKey}:${vodId}:${currentIndex}`, position };
+      if (playbackId) {
+        saveProgress(sourceKey, playbackId, currentIndex, position, duration).catch(() => {});
+        upsertHistory({ sourceKey, sourceUrl: source?.url, vodId: playbackId, directUrl: vodId ? undefined : directUrl, title: videoTitle,
+          pic: detailQuery.data?.videoInfo?.cover, episodeIndex: currentIndex,
+          totalEpisodes: episodes.length, playbackPosition: position, duration,
+          completed: false, timestamp: Date.now() }).catch(() => {});
       }
     },
-    [sourceKey, vodId, currentIndex, currentUrl]
+    [verified, sourceKey, source?.url, vodId, playbackId, directUrl, currentIndex, videoTitle, detailQuery.data?.videoInfo?.cover, episodes.length]
   );
 
   // 自动连播的 800ms 延迟切集要在卸载时取消，避免离开页面后跳转
   const autoNextTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (autoNextTimer.current) clearTimeout(autoNextTimer.current);
-  }, []);
+    autoNextTimer.current = null;
+  }, [sourceKey, vodId, currentIndex, store.autoplayNext]);
 
   const handleEnded = useCallback(() => {
-    if (vodId) clearProgress(sourceKey, vodId, currentIndex).catch(() => {});
+    if (autoNextTimer.current) clearTimeout(autoNextTimer.current);
+    if (playbackId) completeEpisode(sourceKey, playbackId, currentIndex).catch(() => {});
     if (store.autoplayNext && currentIndex < episodes.length - 1) {
       autoNextTimer.current = setTimeout(() => goEpisode(currentIndex + 1), 800);
     }
-  }, [store.autoplayNext, currentIndex, episodes.length, goEpisode, sourceKey, vodId]);
+  }, [store.autoplayNext, currentIndex, episodes.length, goEpisode, sourceKey, playbackId]);
 
-  // Alt+←/→ 集数切换快捷键
+  // Alt+Shift+←/→ switches episodes; Alt+←/→ remains browser Back/Forward.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!e.altKey) return;
+      if (!e.altKey || !e.shiftKey) return;
       if (e.key === 'ArrowLeft' && currentIndex > 0) {
         e.preventDefault();
         goEpisode(currentIndex - 1);
@@ -174,42 +169,44 @@ function WatchContent() {
 
   if (!verified) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="tv-watch-page tv-watch-fallback min-h-screen">
         <p className="text-faint text-sm">等待访问验证...</p>
       </div>
     );
   }
 
-  if (!source) {
+  if (!source && !directUrl) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="tv-watch-page tv-watch-fallback min-h-screen">
         <div className="text-center max-w-md">
           <h1 className="text-content font-medium mb-2">点播源不存在</h1>
           <p className="text-sm text-muted mb-4">
             该视频来自点播源「{sourceKey}」，但它可能已被删除。请在设置中重新添加后重试。
           </p>
-          <Link href="/" className="btn-primary">返回首页</Link>
+          <button type="button" className="btn-primary" onClick={returnToPrevious}>返回上一页</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
-          <BackButton />
+    <div className="tv-watch-page min-h-screen flex flex-col tv-cinema-root">
+      <header className="tv-watch-header">
+        <div className="tv-watch-header__inner">
+          <BackButton onClick={returnToPrevious} />
           <HomeButton />
-          <div className="min-w-0">
-            <h1 className="text-sm font-medium text-content truncate">{videoTitle}</h1>
-            <p className="text-xs text-faint">
-              {source.name}
+          <div className="tv-watch-header__title">
+            <h1>{videoTitle}</h1>
+            <p>
+              {source?.name || '直连视频'}
               {episodes.length > 0 && ` · 第 ${currentIndex + 1}/${episodes.length} 集`}
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="tv-watch-header__actions">
             <button
-              className="btn-ghost btn-sm"
+              className="tv-watch-action"
+              aria-label="下载本集"
+              disabled={!currentUrl}
               onClick={() => {
                 if (!currentUrl) return;
                 enqueueDownload({
@@ -222,32 +219,39 @@ function WatchContent() {
                 // 这里先提示的话，用户随后取消保存位置会出现「已加入→已取消」的矛盾
               }}
             >
-              下载本集
+              <Icon name="download" className="w-4 h-4" /><span className="hidden sm:inline">下载本集</span>
             </button>
-            <button className="btn-ghost btn-sm" onClick={() => setSwitchOpen(true)}>
-              切换资源
+            <button className="tv-watch-action" aria-label="切换资源" onClick={() => setSwitchOpen(true)}>
+              <Icon name="refresh" className="w-4 h-4" /><span className="hidden sm:inline">切换资源</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-          <div>
-            <div className="aspect-video bg-black rounded-lg overflow-hidden">
+      <main className="tv-watch-shell flex-1 mx-auto">
+        <div className="tv-watch-layout">
+          <div className="tv-watch-screen">
+            <div className="tv-watch-stage aspect-video bg-black">
               {currentUrl ? (
                 <PlayerShell
                   url={currentUrl}
                   title={videoTitle}
                   adFilter={store.adFilter}
                   autoplayNext={store.autoplayNext}
-                  episodeKey={`${sourceKey}:${vodId}:${currentIndex}`}
+                  episodeKey={`${sourceKey}:${playbackId}:${currentIndex}`}
                   nextUrl={currentIndex + 1 < episodes.length ? episodes[currentIndex + 1] : undefined}
                   nextEpisodeKey={currentIndex + 1 < episodes.length ? `${sourceKey}:${vodId}:${currentIndex + 1}` : undefined}
                   getRestorePosition={getRestorePosition}
                   onTimeUpdate={handleProgress}
                   onPause={handleProgress}
                   onEnded={handleEnded}
+                  onRequestSwitchSource={() => setSwitchOpen(true)}
+                  items={episodes.map((_, index) => `第 ${index + 1} 集`)}
+                  currentItem={currentIndex}
+                  onSelectItem={goEpisode}
+                  onNext={currentIndex + 1 < episodes.length ? () => goEpisode(currentIndex + 1) : undefined}
+                  onBack={returnToPrevious}
+                  onAutoplayChange={(enabled) => store.updateSettings({ autoplayNext: enabled })}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -255,7 +259,7 @@ function WatchContent() {
                     <Spinner size="lg" />
                   ) : (
                     <p className="text-faint text-sm">
-                      {detailQuery.isError ? '视频加载失败，请尝试其他资源' : '无可用播放地址'}
+                      {detailQuery.isError ? '视频加载失败，请重试或切换资源' : '无可用播放地址'}
                     </p>
                   )}
                 </div>
@@ -263,25 +267,25 @@ function WatchContent() {
             </div>
 
             {/* 操作栏 */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="tv-watch-transport">
               <button
-                className="btn-ghost btn-sm"
-                disabled={currentIndex <= 0}
+                className="tv-watch-action"
+                disabled={episodes.length === 0 || currentIndex <= 0}
                 onClick={() => goEpisode(currentIndex - 1)}
               >
                 上一集
               </button>
               <button
-                className="btn-ghost btn-sm"
+                className="tv-watch-action"
                 disabled={episodes.length === 0 || currentIndex >= episodes.length - 1}
                 onClick={() => goEpisode(currentIndex + 1)}
               >
                 下一集
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-muted ml-auto cursor-pointer">
+              <label className="tv-watch-autoplay">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-[#2563eb]"
+                  className="h-4 w-4 accent-current"
                   checked={store.autoplayNext}
                   onChange={(e) => store.updateSettings({ autoplayNext: e.target.checked })}
                 />
@@ -291,15 +295,15 @@ function WatchContent() {
           </div>
 
           {/* 剧集侧栏 */}
-          <aside className="bg-surface-raised rounded-lg p-3 h-fit">
-            <div className="flex items-center justify-between gap-2 mb-2.5">
-              <h2 className="text-sm font-semibold text-content">
+          <aside className="tv-watch-episodes" aria-label="剧集列表">
+            <div className="tv-watch-episodes__header">
+              <h2>
                 剧集列表{episodes.length > 0 && `（${episodes.length}）`}
               </h2>
               {/* 排列开关紧贴它所作用的列表：放在这里才看得出它管的是这一栏的顺序 */}
               {episodes.length > 1 && (
                 <button
-                  className="btn-ghost btn-sm shrink-0"
+                  className="tv-watch-action tv-watch-action--sort"
                   onClick={() => setReversed((v) => !v)}
                   aria-label={reversed ? '切换为正序排列' : '切换为倒序排列'}
                   title="调整剧集列表的排列顺序"
@@ -316,10 +320,13 @@ function WatchContent() {
               detailQuery.isLoading ? (
                 <LoadingState />
               ) : (
-                <EmptyState variant="plain" title={detailQuery.isError ? '获取剧集失败' : '暂无剧集信息'} />
+                <div>
+                  <EmptyState variant="plain" title={detailQuery.isError ? '获取剧集失败' : '暂无剧集信息'} />
+                  {detailQuery.isError && <button type="button" className="tv-watch-action" onClick={() => void detailQuery.refetch()}>重试加载</button>}
+                </div>
               )
             ) : (
-              <div className="grid grid-cols-5 lg:grid-cols-4 gap-1.5 max-h-[65vh] overflow-y-auto scrollbar-thin pr-1">
+              <div className="tv-watch-episodes__grid scrollbar-thin">
                 {orderedEpisodes.map((realIndex) => (
                   <EpisodeButton
                     key={realIndex}
@@ -330,8 +337,8 @@ function WatchContent() {
                 ))}
               </div>
             )}
-            <p className="hidden md:block text-[10px] text-faint mt-3 leading-relaxed">
-              快捷键：空格 播放/暂停 · ←/→ 快退/快进 5s · ↑/↓ 音量 · F 全屏 · Alt+←/→ 切换集数
+            <p className="tv-watch-episodes__hint">
+              快捷键：空格 播放/暂停 · ←/→ 快退/快进 5s · ↑/↓ 音量 · F 全屏 · Alt+Shift+←/→ 切换集数
             </p>
           </aside>
         </div>
@@ -343,6 +350,8 @@ function WatchContent() {
           currentSourceKey={sourceKey}
           currentVodId={vodId}
           currentIndex={currentIndex}
+          currentYear={detailQuery.data?.videoInfo?.year}
+          getCurrentPosition={() => lastPosition.current.key === `${sourceKey}:${vodId}:${currentIndex}` ? lastPosition.current.position : 0}
           onClose={() => setSwitchOpen(false)}
         />
       )}
@@ -361,7 +370,7 @@ function EpisodeButton({ index, active, onClick }: { index: number; active: bool
   return (
     <button
       ref={ref}
-      className={cn('btn btn-sm !px-1', active ? 'episode-active' : 'btn-ghost')}
+      className={cn('tv-watch-episode', active && 'episode-active')}
       onClick={onClick}
     >
       {index + 1}
@@ -369,16 +378,13 @@ function EpisodeButton({ index, active, onClick }: { index: number; active: bool
   );
 }
 
-function BackButton() {
-  const router = useRouter();
+function BackButton({ onClick }: { onClick: () => void }) {
   return (
     <button
-      className="p-2 -ml-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
-      onClick={() => {
-        if (window.history.length > 1) router.back();
-        else router.push('/');
-      }}
+      className="tv-watch-action tv-watch-action--icon"
+      onClick={onClick}
       aria-label="返回"
+      title="返回上一页"
     >
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -392,7 +398,7 @@ function HomeButton() {
   return (
     <Link
       href="/"
-      className="p-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+      className="tv-watch-action tv-watch-action--icon"
       aria-label="回首页"
       title="回首页"
     >

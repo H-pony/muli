@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SourceConfig, LiveSourceConfig, SourceSearchOutcome } from './types';
 import { clearLiveProbeResultsDb, loadLiveProbeResults, saveLiveProbeResults } from './db';
 import { PERSIST_KEY, createThrottledStorage } from './persist-storage';
+import { liveChannelKey } from './live-channels';
 
 /**
  * 全局设置（zustand + localStorage 持久化）。
@@ -35,7 +36,7 @@ export interface SubscriptionSyncCounts {
 }
 
 /**
- * 数据源订阅：远程源列表（LibreTV-SourceList JSON 或 TVBOX 配置 JSON，由服务端自动识别），可一键同步更新。
+ * 数据源订阅：远程源列表（幕里-SourceList JSON 或 TVBOX 配置 JSON，由服务端自动识别），可一键同步更新。
  * 一份订阅同时下发点播源与直播源；老订阅只有点播源。订阅内容一律归一化为本站源结构，故存储层与格式无关。
  */
 export interface SourceSubscription {
@@ -86,8 +87,9 @@ export interface LiveSubscription {
   fromSubscriptions: string[];
 }
 
-/** 直播最近观看条目（上限 20 条，按 url 去重） */
+/** 直播最近观看条目（上限 20 条，按频道去重，兼容旧 URL 记录） */
 export interface LiveRecentEntry {
+  channelKey?: string;
   url: string;
   name: string;
   logo?: string;
@@ -189,7 +191,7 @@ interface AppState extends AppSettings {
   liveSubscriptions: LiveSubscription[];
   /** 已启用的直播源（按订阅 URL 唯一标识，首次出现自动勾选） */
   liveSelectedUrls: string[];
-  /** 收藏频道（按流 URL 唯一标识） */
+  /** 收藏频道（稳定频道身份；兼容此前保存的流 URL） */
   liveFavorites: string[];
   /** 最近观看频道（上限 20） */
   liveRecent: LiveRecentEntry[];
@@ -231,10 +233,10 @@ interface AppState extends AppSettings {
   toggleLiveSelected: (url: string) => void;
   /** 批量启停直播源：一次 set 完成，避免逐条 toggle 的 O(n) 次持久化 */
   toggleLiveSelectedMany: (urls: string[]) => void;
-  toggleLiveFavorite: (channelUrl: string) => void;
+  toggleLiveFavorite: (channelKey: string, lineUrls?: string[]) => void;
   addLiveRecent: (entry: Omit<LiveRecentEntry, 'timestamp'>) => void;
-  /** 删除单条最近观看（按流 URL） */
-  removeLiveRecent: (channelUrl: string) => void;
+  /** 删除单条最近观看（频道身份或旧流 URL） */
+  removeLiveRecent: (channelKey: string) => void;
   /** 清空最近观看 */
   clearLiveRecent: () => void;
   /** 合并写入测活结果，并顺带清理过期条目 */
@@ -602,22 +604,26 @@ export const useAppStore = create<AppState>()(
         });
       },
 
-      toggleLiveFavorite: (channelUrl) => {
+      toggleLiveFavorite: (channelKey, lineUrls = []) => {
         const cur = get().liveFavorites;
-        set({
-          liveFavorites: cur.includes(channelUrl)
-            ? cur.filter((u) => u !== channelUrl)
-            : [...cur, channelUrl],
-        });
+        const aliases = new Set([channelKey, ...lineUrls]);
+        const wasFavorite = cur.some((key) => aliases.has(key));
+        const rest = cur.filter((key) => !aliases.has(key));
+        set({ liveFavorites: wasFavorite ? rest : [...rest, channelKey] });
       },
 
       addLiveRecent: (entry) => {
-        const rest = get().liveRecent.filter((r) => r.url !== entry.url);
-        set({ liveRecent: [{ ...entry, timestamp: Date.now() }, ...rest].slice(0, 20) });
+        const channelKey = entry.channelKey || liveChannelKey(entry);
+        const rest = get().liveRecent.filter((r) =>
+          r.url !== entry.url && (r.channelKey || liveChannelKey(r)) !== channelKey
+        );
+        set({ liveRecent: [{ ...entry, channelKey, timestamp: Date.now() }, ...rest].slice(0, 20) });
       },
 
-      removeLiveRecent: (channelUrl) => {
-        set({ liveRecent: get().liveRecent.filter((r) => r.url !== channelUrl) });
+      removeLiveRecent: (channelKey) => {
+        set({ liveRecent: get().liveRecent.filter((r) =>
+          r.url !== channelKey && (r.channelKey || liveChannelKey(r)) !== channelKey
+        ) });
       },
 
       clearLiveRecent: () => set({ liveRecent: [] }),

@@ -16,10 +16,10 @@ interface SearchBody {
 /** 搜索结果短缓存：同一关键词 + 同一组源在 TTL 内直接返回（播放页返回搜索页等场景） */
 const SEARCH_CACHE_TTL = 60 * 1000;
 
-/** 缓存键：wd + 成人过滤 + 排序后的源地址集合（直接用完整字符串，避免哈希碰撞串缓存） */
+/** 结果包含来源身份与元数据，缓存必须跟随来源重命名、重导入和成人标记变化。 */
 function searchCacheKey(wd: string, sources: SourceConfig[], filterAdult: boolean): string {
-  const urls = sources.map((s) => s.url.replace(/\/+$/, '')).sort().join('|');
-  return `search:${wd}\n${filterAdult ? 1 : 0}\n${urls}`;
+  const identities = sources.map((s) => JSON.stringify([s.key, s.name, s.url.replace(/\/+$/, ''), s.detail || '', !!s.isAdult])).sort();
+  return `search:${JSON.stringify([wd, filterAdult, identities])}`;
 }
 
 /**
@@ -56,10 +56,11 @@ function isTimeoutError(err: unknown): boolean {
  * 整源受 SEARCH_SOURCE_TIMEOUT_MS 总死线约束。
  * 旧版在浏览器里打满 N 个请求（暴露用户 IP、无法缓存、超时失控），现全部上移。
  */
-async function searchSource(source: SourceConfig, wd: string): Promise<SourceSearchOutcome> {
+async function searchSource(source: SourceConfig, wd: string, signal: AbortSignal): Promise<SourceSearchOutcome> {
   const start = Date.now();
   const finish = (outcome: Omit<SourceSearchOutcome, 'ms'>): SourceSearchOutcome => ({
     ...outcome,
+    list: outcome.list.filter((item) => !item.name.includes('电影解说')),
     ms: Date.now() - start,
   });
 
@@ -96,7 +97,7 @@ async function searchSource(source: SourceConfig, wd: string): Promise<SourceSea
     const res = await fetchUpstream(api, {
       timeoutMs: 8000,
       headers: cmsRequestHeaders(),
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, signal]),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '请求格式错误' }, { status: 400 });
   }
 
-  const wd = (body.wd || '').trim();
+  const wd = typeof body?.wd === 'string' ? body.wd.trim() : '';
   if (!wd || wd.length > 100) {
     return NextResponse.json({ error: '搜索关键词无效' }, { status: 400 });
   }
@@ -207,6 +208,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '请至少选择一个点播源' }, { status: 400 });
   }
   const sources = body.sources.slice(0, 50);
+  if (sources.some((s) => !s || typeof s.key !== 'string' || !s.key.trim() ||
+    typeof s.name !== 'string' || typeof s.url !== 'string' ||
+    (s.detail !== undefined && typeof s.detail !== 'string'))) {
+    return NextResponse.json({ error: '点播源配置无效' }, { status: 400 });
+  }
   const filterAdult = body.filterAdult !== false;
 
   const cacheKey = searchCacheKey(wd, sources, filterAdult);
@@ -224,13 +230,15 @@ export async function POST(req: Request) {
 
   const isStream = new URL(req.url).searchParams.get('stream') === '1';
   if (!isStream) {
-    const outcomes = await Promise.all(sources.map((source) => searchSource(source, wd)));
+    const outcomes = await Promise.all(sources.map((source) => searchSource(source, wd, req.signal)));
     const payload = aggregateOutcomes(outcomes, wd, filterAdult);
-    setCache(cacheKey, payload, SEARCH_CACHE_TTL);
+    if (!req.signal.aborted) setCache(cacheKey, payload, SEARCH_CACHE_TTL);
     return NextResponse.json(payload);
   }
 
   const encoder = new TextEncoder();
+  const streamAbort = new AbortController();
+  const signal = AbortSignal.any([req.signal, streamAbort.signal]);
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -247,20 +255,21 @@ export async function POST(req: Request) {
       const outcomes: SourceSearchOutcome[] = new Array(sources.length);
       await Promise.all(
         sources.map(async (source, i) => {
-          const outcome = await searchSource(source, wd);
+          const outcome = await searchSource(source, wd, signal);
           outcomes[i] = outcome;
           send({ type: 'source', ...outcome });
         })
       );
 
       const payload = aggregateOutcomes(outcomes, wd, filterAdult);
-      setCache(cacheKey, payload, SEARCH_CACHE_TTL);
+      if (!signal.aborted) setCache(cacheKey, payload, SEARCH_CACHE_TTL);
       send({ type: 'done', list: payload.list, failures: payload.failures });
       closed = true;
       try {
         controller.close();
       } catch { /* 已断开 */ }
     },
+    cancel() { streamAbort.abort(); },
   });
 
   return new Response(stream, {

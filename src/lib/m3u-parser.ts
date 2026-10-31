@@ -35,6 +35,27 @@ export function normalizeStreamUrl(raw: string, baseUrl?: string): string | unde
   }
 }
 
+/** 读取订阅头中的可选 EPG 地址；仅解析元数据，不请求节目单。 */
+export function parseM3uEpg(content: string, baseUrl?: string): string | undefined {
+  const header = content.match(/^[\t \uFEFF]*#EXTM3U\b([^\r\n]*)/im)?.[1];
+  if (!header) return undefined;
+
+  const attrs: Record<string, string> = {};
+  const attrRe = /([a-zA-Z0-9_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"']+))/g;
+  let match: RegExpExecArray | null;
+  while ((match = attrRe.exec(header))) {
+    attrs[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4];
+  }
+
+  for (const key of ['x-tvg-url', 'url-tvg', 'tvg-url']) {
+    // 部分订阅会用逗号列出多个节目单；只读取首个地址，避免将 data: 等协议的载荷当成相对 URL。
+    const raw = (attrs[key] || '').split(',')[0];
+    const url = normalizeStreamUrl(raw, baseUrl);
+    if (url) return url;
+  }
+  return undefined;
+}
+
 /** URL 无名时的兜底名称：取路径末段，decode 后仍空则用主机名 */
 function nameFromUrl(url: string): string {
   try {

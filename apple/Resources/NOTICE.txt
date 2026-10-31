@@ -1,0 +1,37 @@
+幕里 Apple 原生客户端 · 2.16.12
+
+本客户端提供推荐聚合、片名搜索、影片详情与选集、AVPlayer 点播/直播、观看历史与设置，安装后由设备直接请求数据来源，无需电脑服务器。
+
+上游来源与权利声明
+基于 LibreSpark/LibreTV 项目及其 Android TV 客户端的数据源配置与解析行为开发。
+上游地址：https://github.com/LibreSpark/LibreTV
+产品显示名称已修改为幕里；此处保留原作者与原始项目名称仅用于必要的来源和权利归属说明。
+Apple Swift/SwiftUI 实现为新增工作，按 GNU AGPL-3.0-or-later 提供，完整许可证随应用提供于 LICENSE.txt。
+本软件不提供任何担保。在遵守许可的前提下，可以运行、研究、修改和再分发本软件。配套交付的“幕里-Apple源码-2.16.12.zip”包含本版本 Apple 客户端对应源代码及构建脚本。
+
+点播数据来源
+360资源：https://360zy.com/api.php/provide/vod
+如意资源：https://cj.rycjapi.com/api.php/provide/vod
+暴风资源：https://bfzyapi.com/api.php/provide/vod
+点播来源配置参考：https://telegra.ph/APIs-08-12
+
+直播节目目录
+IPTV-org：https://github.com/iptv-org/iptv
+频道订阅：https://iptv-org.github.io/iptv/countries/cn.m3u
+Fanmingming：https://github.com/fanmingming/live
+频道订阅：https://live.fanmingming.com/tv/m3u/ipv6.m3u
+ChinaIPTV：https://github.com/hujingguang/ChinaIPTV
+备用订阅：https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8
+本地 channels.m3u 保留来自原客户端的公开频道快照及其注释；在线刷新失败时仍展示本地目录。节目地址、地区限制、IPv6 要求与媒体兼容性可能随源站调整。
+
+高清背景与元数据
+TMDB：https://www.themoviedb.org
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+根目录共享片目为明确核实过的内置匹配，仅覆盖该目录列出的作品；不代表全片库免 API 凭据。详情先显示原封面，独立异步获取横向高清背景，未匹配、超时或图片加载失败时保留封面，不影响详情与播放。
+可在“设置 → 高清背景图”填写自己的 TMDB v3 API Key 或 API 读取令牌，凭据仅保存在本机 Keychain，不导出、不写入历史或日志。配置后通过 https://api.themoviedb.org/3 官方 API 匹配更多作品，图片通过 https://image.tmdb.org 获取；未配置凭据时不搜索 API，不抓取 TMDB 网页。
+
+原生技术与隐私
+使用 Apple SwiftUI、Foundation URLSession、AVKit / AVFoundation，不捆绑 AndroidX Media3 或第三方播放器。
+图标为本次幕里品牌更新提供的新图形。
+第三方服务器会收到设备为加载内容而发送的正常网络请求。客户端无广告 SDK、追踪 SDK、账号登录和个人数据上传；观看记录和来源开关仅保存在本机。
+本项目不拥有第三方影视节目的版权，不制作、存储或上传影片。内容由第三方网站提供，请尊重权利人，仅访问你有权观看的内容。

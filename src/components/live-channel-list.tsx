@@ -11,13 +11,15 @@ import {
   matchesAlive,
   matchesKeyword,
   normalizeForSearch,
+  probeRank,
   sortChannels,
   type AliveFilter,
   type LiveSortMode,
 } from '@/lib/live-channel-filter';
 import { useLiveProbe, type ProbeResult } from './use-live-probe';
-import type { LiveChannel } from '@/lib/types';
 import { EmptyState } from './states';
+import { channelHasUrl, findRecentChannel, isLiveFavorite, type LiveChannelItem } from '@/lib/live-channels';
+export type { LiveChannelItem } from '@/lib/live-channels';
 
 /**
  * 直播频道侧栏：全部/收藏/最近三个视图 + 分组横向标签条 + 关键字搜索 + 排序。
@@ -40,13 +42,6 @@ function formatProbeProgress(p: { done: number; total: number; startedAt: number
   if (p.done <= 0) return `${base} · 估算中…`;
   const remainMin = Math.ceil(((Date.now() - p.startedAt) / p.done) * remaining / 60000);
   return `${base} · 预计剩余 ${Math.max(1, remainMin)} 分钟`;
-}
-
-export interface LiveChannelItem extends LiveChannel {
-  /** 来源订阅的 EPG 地址（用于节目单查询） */
-  epg?: string;
-  /** 所属直播源地址（M3U 订阅 URL），写入最近观看以便订阅删除时清理 */
-  sourceUrl?: string;
 }
 
 interface ChannelListProps {
@@ -104,38 +99,49 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
   }, [isProbing]);
 
   const favSet = useMemo(() => new Set(liveFavorites), [liveFavorites]);
-  const recentOrder = useMemo(() => new Map(liveRecent.map((r, i) => [r.url, i] as const)), [liveRecent]);
+  const recentChannels = useMemo(() => {
+    const seen = new Set<string>();
+    return liveRecent.flatMap((recent) => {
+      const channel = findRecentChannel(channels, recent);
+      if (!channel || seen.has(channel.channelKey)) return [];
+      seen.add(channel.channelKey);
+      return [channel];
+    });
+  }, [channels, liveRecent]);
+  const recentOrder = useMemo(() => {
+    const order = new Map(recentChannels.map((channel, i) => [channel.channelKey, i]));
+    return new Map(channels.map((channel) => [channel.url, order.get(channel.channelKey) ?? Infinity]));
+  }, [channels, recentChannels]);
+  const favoriteCount = useMemo(() => channels.filter((channel) => isLiveFavorite(channel, favSet)).length, [channels, favSet]);
   const normalizedKeyword = useMemo(() => normalizeForSearch(debouncedKeyword.trim()), [debouncedKeyword]);
+  // 任一线路通过即可让频道进入可用列表；测活本身仍逐条检查各线路。
+  const channelProbes = useMemo(() => {
+    const grouped = new Map<string, ProbeResult>();
+    for (const channel of channels) {
+      let best: ProbeResult | undefined;
+      for (const line of channel.lines) {
+        const probe = probeResults.get(line.url);
+        if (probe && (!best || probeRank(probe) < probeRank(best) ||
+          (probeRank(probe) === probeRank(best) && (probe.ms ?? Infinity) < (best.ms ?? Infinity)))) best = probe;
+      }
+      if (best) for (const line of channel.lines) grouped.set(line.url, best);
+    }
+    return grouped;
+  }, [channels, probeResults]);
 
-  // 先做视图/分组/搜索/排序（不含可用性筛选）：可用性计数必须基于这份列表，
-  // 否则点击筛选后 filtered 收缩，两个计数会跟着变小、与实际展示对不上
+  // 可用性计数基于未应用可用性筛选的列表，避免按钮数量随筛选收缩。
   const matched = useMemo(() => {
-    let list: LiveChannelItem[];
-    if (view === 'fav') {
-      list = channels.filter((c) => favSet.has(c.url));
-    } else if (view === 'recent') {
-      // 按最近观看时间倒序
-      list = liveRecent
-        .map((r) => channels.find((c) => c.url === r.url))
-        .filter((c): c is LiveChannelItem => Boolean(c));
-    } else {
-      list = channels;
-    }
-    if (view !== 'recent' && group) {
-      list = list.filter((c) => c.group === group);
-    }
-    if (normalizedKeyword) {
-      list = list.filter((c) => matchesKeyword(c, normalizedKeyword));
-    }
-    return sortChannels(list, sortMode, { recentOrder, probeOf: (url) => probeResults.get(url) });
-  }, [channels, favSet, liveRecent, view, group, normalizedKeyword, sortMode, recentOrder, probeResults]);
+    let list = view === 'fav'
+      ? channels.filter((channel) => isLiveFavorite(channel, favSet))
+      : view === 'recent' ? recentChannels : channels;
+    if (view !== 'recent' && group) list = list.filter((channel) => channel.group === group);
+    if (normalizedKeyword) list = list.filter((channel) => matchesKeyword(channel, normalizedKeyword));
+    return sortChannels(list, sortMode, { recentOrder, probeOf: (url) => channelProbes.get(url) });
+  }, [channels, favSet, recentChannels, view, group, normalizedKeyword, sortMode, recentOrder, channelProbes]);
 
   const filtered = useMemo(
-    () =>
-      aliveFilter === 'off'
-        ? matched
-        : matched.filter((c) => matchesAlive(probeResults.get(c.url), aliveFilter)),
-    [matched, aliveFilter, probeResults]
+    () => aliveFilter === 'off' ? matched : matched.filter((channel) => matchesAlive(channelProbes.get(channel.url), aliveFilter)),
+    [matched, aliveFilter, channelProbes]
   );
 
   // 上报筛选排序结果给页面（键盘换台用）；列表存父组件 ref，不触发父组件重渲染
@@ -148,13 +154,13 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
     let ok = 0;
     let green = 0;
     for (const c of matched) {
-      const p = probeResults.get(c.url);
+      const p = channelProbes.get(c.url);
       if (!p?.ok) continue;
       ok++;
       if (matchesAlive(p, 'green')) green++;
     }
     return { ok, green };
-  }, [matched, probeResults]);
+  }, [matched, channelProbes]);
 
   // 键盘/锚定滚动需要按 URL 反查索引；filtered 随测活结果变化（排序含可用性），
   // 用 ref 读取最新值，避免测活写回触发重新锚定打断用户滚动
@@ -167,7 +173,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
     // 行高两档：带分组名的双行 / 无分组名单行（含 4px 行距），measureElement 会修正估值
     estimateSize: (i) => (filtered[i].group ? 51 : 47),
     overscan: 10,
-    getItemKey: (i) => filtered[i].url,
+    getItemKey: (i) => filtered[i].channelKey,
   });
 
   // 切换筛选/排序/频道时：重置键盘光标，并把当前播放频道锚定到可视区（找不到则回顶部）
@@ -177,14 +183,14 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
       virtualizer.scrollToOffset(0);
       return;
     }
-    const idx = filteredRef.current.findIndex((c) => c.url === currentUrl);
+    const idx = filteredRef.current.findIndex((c) => channelHasUrl(c, currentUrl));
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: 'auto' });
     else virtualizer.scrollToOffset(0);
   }, [view, group, sortMode, debouncedKeyword, aliveFilter, currentUrl, virtualizer]);
 
   const scrollToChannelRow = useCallback(
     (url: string) => {
-      const idx = filteredRef.current.findIndex((c) => c.url === url);
+      const idx = filteredRef.current.findIndex((c) => channelHasUrl(c, url));
       if (idx >= 0) virtualizer.scrollToIndex(idx, { align: 'auto' });
     },
     [virtualizer]
@@ -214,21 +220,21 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
   }, []);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {/* 视图 tab */}
-      <div className="flex items-center gap-1 px-3 pt-2.5 pb-2 border-b border-line shrink-0">
+      <div className="mx-4 mb-1 mt-4 flex shrink-0 items-center gap-1 rounded-2xl bg-chip p-1">
         {(
           [
             ['all', `全部${channels.length ? ` ${channels.length}` : ''}`],
-            ['fav', `收藏${liveFavorites.length ? ` ${liveFavorites.length}` : ''}`],
+            ['fav', `收藏${favoriteCount ? ` ${favoriteCount}` : ''}`],
             ['recent', '最近'],
           ] as [View, string][]
         ).map(([v, label]) => (
           <button
             key={v}
             className={cn(
-              'px-2.5 py-1 rounded-md text-xs transition-colors',
-              view === v ? 'bg-accent/10 text-accent font-medium' : 'text-muted hover:text-content hover:bg-hover'
+              'min-w-0 flex-1 rounded-xl px-2 py-2.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              view === v ? 'bg-accent text-on-accent font-semibold shadow-sm' : 'text-muted hover:text-content hover:bg-hover'
             )}
             onClick={() => setView(v)}
           >
@@ -238,9 +244,9 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
       </div>
 
       {/* 搜索 + 排序 */}
-      <div className="px-3 py-2 shrink-0 flex items-center gap-1.5">
+      <div className="flex min-w-0 shrink-0 items-center gap-2 px-4 py-3">
         <input
-          className="input w-full !py-1.5 text-xs"
+          className="input min-w-0 w-full !rounded-xl !border-line/60 !px-3.5 !py-2.5 !text-xs"
           placeholder="搜索频道 / tvg-id / 分组..."
           value={keyword}
           maxLength={60}
@@ -256,7 +262,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
           }}
         />
         <Dropdown
-          className="shrink-0 [&>button]:!py-1.5 [&>button]:!px-2 [&>button]:text-xs"
+          className="shrink-0 [&>button]:!rounded-xl [&>button]:!border-line/60 [&>button]:!py-2.5 [&>button]:!px-3 [&>button]:!text-xs"
           value={sortMode}
           ariaLabel="排序方式"
           onChange={(v) => setSortMode(v as LiveSortMode)}
@@ -271,11 +277,11 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
       </div>
 
       {/* 测活 + 可用性筛选工具条 */}
-      <div className="flex items-center gap-1.5 px-3 pb-2 shrink-0 flex-wrap">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 px-4 pb-3">
         <button
-          className="btn-ghost btn-sm"
+          className="btn-ghost btn-sm !rounded-full !border-line/60 !px-3 !py-1.5"
           disabled={isProbing || filtered.length === 0}
-          onClick={() => void probe(filtered)}
+          onClick={() => void probe(filtered.flatMap((channel) => channel.lines))}
           title="探测当前列表频道是否可播（分片级校验；量大时自动分批排队跑完，结果 6 小时内有效）"
         >
           测活
@@ -283,7 +289,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
         {/* 同一操作位按时机切换：测活中=取消（保留已完成结果）；空闲且有结果=清除全部 */}
         {isProbing ? (
           <button
-            className="btn-ghost btn-sm"
+            className="btn-ghost btn-sm !rounded-full !border-line/60 !px-3 !py-1.5"
             onClick={cancelProbe}
             title="中止本次测活，已完成的结果会保留"
           >
@@ -292,7 +298,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
         ) : (
           probeResults.size > 0 && (
             <button
-              className="btn-ghost btn-sm"
+              className="btn-ghost btn-sm !rounded-full !border-line/60 !px-3 !py-1.5"
               onClick={() => {
                 clearProbe();
                 setAliveFilter('off');
@@ -304,7 +310,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
           )
         )}
         {isProbing && probeProgress && (
-          <span className="text-[10px] text-faint whitespace-nowrap">
+          <span className="max-w-full break-words text-[10px] leading-relaxed text-faint">
             探测中 {formatProbeProgress(probeProgress)}
           </span>
         )}
@@ -315,7 +321,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
           <>
             <button
               className={cn(
-                'shrink-0 px-2 py-0.5 rounded-full text-[10px] whitespace-nowrap transition-colors border',
+                'shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 aliveFilter === 'green'
                   ? 'bg-accent text-on-accent border-accent'
                   : 'bg-chip text-muted border-line hover:text-content hover:bg-hover'
@@ -327,7 +333,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
             </button>
             <button
               className={cn(
-                'shrink-0 px-2 py-0.5 rounded-full text-[10px] whitespace-nowrap transition-colors border',
+                'shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 aliveFilter === 'ok'
                   ? 'bg-accent text-on-accent border-accent'
                   : 'bg-chip text-muted border-line hover:text-content hover:bg-hover'
@@ -343,8 +349,8 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
 
       {/* 分组标签条（横向可滑动） */}
       {view === 'all' && groups.length > 0 && (
-        <div className="px-3 pb-2 shrink-0">
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1">
+        <div className="min-w-0 shrink-0 px-4 pb-3">
+          <div className="scrollbar-thin flex min-w-0 gap-2 overflow-x-auto pb-1">
             <GroupChip active={!group} label="全部分组" onClick={() => setGroup('')} />
             {groups.map((g) => (
               <GroupChip key={g} active={group === g} label={g} onClick={() => setGroup(g === group ? '' : g)} />
@@ -359,7 +365,7 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
         data-channel-list
         tabIndex={0}
         onKeyDown={onListKeyDown}
-        className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2 pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+        className="scrollbar-thin min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
       >
         {filtered.length === 0 ? (
           <EmptyState
@@ -396,10 +402,10 @@ export function LiveChannelList({ channels, groups, currentUrl, onSelect, onFilt
               >
                 <ChannelRow
                   channel={filtered[vi.index]}
-                  active={filtered[vi.index].url === currentUrl}
+                  active={channelHasUrl(filtered[vi.index], currentUrl)}
                   cursor={cursor === vi.index}
-                  isFav={favSet.has(filtered[vi.index].url)}
-                  probe={probeResults.get(filtered[vi.index].url)}
+                  isFav={isLiveFavorite(filtered[vi.index], favSet)}
+                  probe={channelProbes.get(filtered[vi.index].url)}
                   logo={filtered[vi.index].logo}
                   imageProxyMode={imageProxyMode}
                   customProxy={customImageProxy}
@@ -419,7 +425,7 @@ function GroupChip({ label, active, onClick }: { label: string; active: boolean;
   return (
     <button
       className={cn(
-        'shrink-0 px-2.5 py-1 rounded-full text-xs whitespace-nowrap transition-colors border',
+        'shrink-0 rounded-full border px-3 py-1.5 text-xs whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         active
           ? 'bg-accent text-on-accent border-accent'
           : 'bg-chip text-muted border-line hover:text-content hover:bg-hover'
@@ -492,21 +498,21 @@ const ChannelRow = memo(function ChannelRow({
           键盘操作由外层列表容器的 ↑↓ 导航提供 */}
       <div
         className={cn(
-          'group flex items-center gap-2.5 px-2 py-2 rounded-md cursor-pointer transition-colors relative',
-          active ? 'bg-accent/10' : 'hover:bg-hover',
-          cursor && 'ring-1 ring-accent/70'
+          'group relative flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-3 transition-colors',
+          active ? 'bg-accent text-on-accent' : 'text-content hover:bg-chip',
+          cursor && 'ring-2 ring-inset ring-accent/70'
         )}
         onClick={() => onSelect(channel)}
       >
         {/* 当前播放高亮竖条 */}
         <span
           className={cn(
-            'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full bg-accent transition-all duration-200',
+            'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full bg-on-accent/50 transition-all duration-200',
             active ? 'h-5 opacity-100' : 'h-0 opacity-0'
           )}
         />
         {/* 台标 */}
-        <div className="w-7 h-7 shrink-0 rounded bg-chip flex items-center justify-center overflow-hidden">
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl p-1", active ? "bg-on-accent/10" : "bg-chip")}>
           {logo && !logoFailed ? (
             <SmartImage
               url={logo}
@@ -517,7 +523,7 @@ const ChannelRow = memo(function ChannelRow({
               onExhausted={() => setLogoFailed(true)}
             />
           ) : (
-            <span className="text-[10px] text-faint">{channel.name.slice(0, 1)}</span>
+            <span className={cn("text-xs", active ? "text-on-accent/70" : "text-faint")}>{channel.name.slice(0, 1)}</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -528,12 +534,17 @@ const ChannelRow = memo(function ChannelRow({
                 title={probeTitle}
               />
             )}
-            <span className={cn('text-xs truncate', active ? 'text-accent font-medium' : 'text-content')}>
+            <span className={cn('truncate text-[13px]', active ? 'font-semibold text-on-accent' : 'font-medium text-content')}>
               {channel.name}
             </span>
+            {channel.lines.length > 1 && (
+              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[9px]', active ? 'bg-on-accent/10 text-on-accent/75' : 'bg-chip text-faint')}>
+                {channel.lines.length} 线路
+              </span>
+            )}
             {isHevc && (
               <span
-                className="shrink-0 rounded-full bg-warning/15 px-1.5 text-[10px] font-medium text-warning"
+                className={cn("shrink-0 rounded-full px-1.5 text-[10px] font-medium", active ? "bg-on-accent/10 text-on-accent/80" : "bg-warning/15 text-warning")}
                 title="H.265 编码：测活通过但 Chromium 内核通常无法解码，建议用 Edge/Safari"
               >
                 H.265
@@ -541,21 +552,21 @@ const ChannelRow = memo(function ChannelRow({
             )}
           </div>
           {channel.group && (
-            <div className="text-[10px] text-faint truncate">{channel.group}</div>
+            <div className={cn("mt-0.5 truncate text-[11px]", active ? "text-on-accent/65" : "text-faint")}>{channel.group}</div>
           )}
         </div>
         {/* 最近观看单条删除（仅最近视图；移动端常显） */}
         {onRemoveRecent && (
           <button
             className={cn(
-              'shrink-0 p-1 rounded transition-colors',
-              'text-faint/60 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-danger'
+              'shrink-0 rounded-full p-1.5 transition-colors opacity-60 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 hover:opacity-100',
+              active ? 'text-on-accent/60 hover:text-on-accent' : 'text-faint hover:text-danger'
             )}
             aria-label="删除该观看记录"
             title="删除该观看记录"
             onClick={(e) => {
               e.stopPropagation();
-              onRemoveRecent(channel.url);
+              onRemoveRecent(channel.channelKey);
             }}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -566,17 +577,19 @@ const ChannelRow = memo(function ChannelRow({
         {/* 收藏星标（移动端常显，桌面 hover 出现） */}
         <button
           className={cn(
-            'shrink-0 p-1 rounded transition-transform active:scale-125',
+            'shrink-0 rounded-full p-1.5 transition-transform active:scale-125 focus-visible:opacity-100',
             isFav
-              ? 'text-warning'
-              : 'text-faint/60 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-warning'
+              ? active ? 'text-on-accent' : 'text-warning'
+              : active
+                ? 'text-on-accent/60 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-on-accent'
+                : 'text-faint/60 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 hover:text-warning'
           )}
           aria-label={isFav ? '取消收藏' : '收藏'}
           title={isFav ? '取消收藏' : '收藏'}
           onClick={(e) => {
             e.stopPropagation();
             // 点击时读取最新状态：行组件不订阅 store，保证探测期间的重渲染隔离
-            useAppStore.getState().toggleLiveFavorite(channel.url);
+            useAppStore.getState().toggleLiveFavorite(channel.channelKey, channel.lines.map((line) => line.url));
           }}
         >
           <svg className="w-3.5 h-3.5" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">

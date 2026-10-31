@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { buildImageCandidates, buildImageUrl } from './utils';
+import { buildImageCandidates, buildImageUrl, buildWatchUrl } from './utils';
+
+describe('观看链接续播与重播', () => {
+  it('显式 0 保留从头播放语义，省略位置才读取本地进度', () => {
+    expect(buildWatchUrl({ sourceKey: 'a', vodId: '1', position: 0 })).toContain('position=0');
+    expect(buildWatchUrl({ sourceKey: 'a', vodId: '1' })).not.toContain('position=');
+  });
+  it('直连分享不伪造 CMS 视频 ID', () => {
+    const params = new URL(buildWatchUrl({ sourceKey: 'direct', episodeUrl: 'https://cdn.example.com/a.m3u8', position: 120 }), 'https://local.test').searchParams;
+    expect(params.get('url')).toBe('https://cdn.example.com/a.m3u8');
+    expect(params.has('id')).toBe(false);
+    expect(params.get('position')).toBe('120');
+  });
+});
 
 describe('buildImageUrl', () => {
   it('proxy 模式走查询串形式（路径形式会被 EdgeOne 等网关归一化破坏）', () => {
@@ -20,12 +33,12 @@ describe('buildImageUrl', () => {
 describe('buildImageCandidates', () => {
   const DOUBAN = 'https://img3.doubanio.com/view/photo/m/poster.jpg';
 
-  it('direct 模式豆瓣图：直连 → 双镜像 → 内置代理', () => {
+  it('direct 模式豆瓣图：直连 → 内置代理 → 双镜像', () => {
     expect(buildImageCandidates(DOUBAN, 'direct', '')).toEqual([
       DOUBAN,
+      '/api/proxy?url=' + encodeURIComponent(DOUBAN),
       'https://img.doubanio.cmliussss.net/view/photo/m/poster.jpg',
       'https://img.doubanio.cmliussss.com/view/photo/m/poster.jpg',
-      '/api/proxy?url=' + encodeURIComponent(DOUBAN),
     ]);
   });
 

@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import Link from 'next/link';
+import { NavigationWatchLink } from './navigation-watch-link';
+import { readNavigationLayer, updateNavigationLayerUi } from '@/lib/navigation';
+import { useNavigationLayer, useNavigationScrollRestoration } from '@/lib/navigation-hooks';
 import { Drawer } from './drawer';
 import { ConfirmDialog } from './confirm-dialog';
 import { EmptyState, LoadingState } from './states';
@@ -19,6 +21,7 @@ import {
 import { buildWatchUrl, cn, formatRelativeTime, formatTime } from '@/lib/utils';
 import { useToast } from './toast';
 import { resolveSource, useAppStore } from '@/lib/store';
+import { detailPlaybackAction } from '@/lib/detail-playback';
 
 /**
  * 观看历史面板（IndexedDB 实时查询）。
@@ -38,11 +41,33 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
   const { toast } = useToast();
   const [confirmClear, setConfirmClear] = useState(false);
   const [query, setQuery] = useState('');
+  const { layer, open: openHistory, close: closeHistory } = useNavigationLayer<Record<string, never>>('history');
+  const hadLayer = useRef(false);
+  useNavigationScrollRestoration();
 
-  // 关闭后重置搜索词：下次打开回到完整列表，不残留上次的过滤状态
   useEffect(() => {
-    if (!open) setQuery('');
-  }, [open]);
+    if (open && !readNavigationLayer('history')) openHistory({});
+  }, [open, openHistory]);
+  useEffect(() => {
+    if (layer) {
+      hadLayer.current = true;
+      setQuery(typeof layer.ui?.query === 'string' ? layer.ui.query : '');
+    } else if (hadLayer.current) {
+      hadLayer.current = false;
+      setQuery('');
+      setConfirmClear(false);
+      onClose();
+    }
+  }, [layer, onClose]);
+  const close = useCallback(() => {
+    setConfirmClear(false);
+    closeHistory();
+    onClose();
+  }, [closeHistory, onClose]);
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    updateNavigationLayerUi('history', { query: value });
+  };
 
   const keyword = query.trim().toLowerCase();
   const visible = useMemo(() => {
@@ -55,46 +80,53 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Drawer
-      open={open}
-      onClose={onClose}
-      title="观看历史"
-      width="max-w-lg"
+      open={Boolean(layer)}
+      onClose={close}
+      title="资料库"
+      width="max-w-xl"
       // 搜索框放在固定副标题栏：历史较长时滚动列表仍可随时改关键字
       subheader={
-        total > 0 ? (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Icon
-                name="search"
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none"
-              />
-              <input
-                type="text"
-                className="w-full h-9 pl-8 pr-8 rounded-lg border border-line bg-chip text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
-                placeholder="搜索观看历史..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="搜索观看历史"
-              />
-              {query && (
-                <button
-                  type="button"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-faint hover:text-content hover:bg-hover transition-colors"
-                  onClick={() => setQuery('')}
-                  aria-label="清空搜索"
-                >
-                  <Icon name="close" className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <button
-              className="shrink-0 px-2 py-1.5 rounded-md text-xs text-faint hover:text-danger hover:bg-hover transition-colors"
-              onClick={() => setConfirmClear(true)}
-            >
-              清空历史
-            </button>
+        <div className="tv-history__toolbar space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-muted">观看历史</p>
+            {history && <span className="text-xs text-faint">{total} 条记录</span>}
           </div>
-        ) : undefined
+          {total > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Icon
+                  name="search"
+                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+                />
+                <input
+                  type="text"
+                  className="h-11 w-full rounded-2xl border border-line/70 bg-chip/70 pl-10 pr-10 text-sm text-content placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/50"
+                  placeholder="搜索观看历史..."
+                  value={query}
+                  onChange={(e) => changeQuery(e.target.value)}
+                  aria-label="搜索观看历史"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-faint transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/60"
+                    onClick={() => changeQuery('')}
+                    aria-label="清空搜索"
+                  >
+                    <Icon name="close" className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full px-3 text-xs font-medium text-muted transition-colors hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/60"
+                onClick={() => setConfirmClear(true)}
+              >
+                清空历史
+              </button>
+            </div>
+          )}
+        </div>
       }
     >
       {!history ? (
@@ -106,11 +138,11 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
       ) : (
         <>
           {!keyword && total > VISIBLE_LIMIT && (
-            <p className="text-xs text-faint mb-2">
+            <p className="mb-4 text-xs leading-relaxed text-faint">
               共 {total} 条记录，仅显示最近 {VISIBLE_LIMIT} 条，可用上方搜索查找更早的记录
             </p>
           )}
-          <ul className="space-y-2">
+          <ul className="tv-history__list space-y-3">
             {visible.map((item) => (
               <HistoryItem key={`${item.sourceKey}_${item.vodId}`} item={item} />
             ))}
@@ -127,7 +159,7 @@ export function HistoryPanel({ open, onClose }: { open: boolean; onClose: () => 
         confirmLabel="清空"
         onCancel={() => setConfirmClear(false)}
         onConfirm={() => {
-          void clearAllHistory().then(() => toast('观看历史已清空', 'success'));
+          void clearAllHistory().then(() => toast('观看历史已清空', 'success')).catch(() => toast('清空失败，请重试', 'error'));
           setConfirmClear(false);
         }}
       />
@@ -143,16 +175,19 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
   const envSources = useAppStore((s) => s.envSources);
   const { toast } = useToast();
   const [imgFailed, setImgFailed] = useState(false);
-  const source = resolveSource({ customAPIs, envSources }, item.sourceKey);
+  const source = resolveSource({ customAPIs, envSources }, item.sourceKey, { url: item.sourceUrl });
 
   const hasPercent =
     item.playbackPosition > 10 && item.duration > 0 && item.playbackPosition < item.duration * 0.95;
   const percent = hasPercent ? Math.round((item.playbackPosition / item.duration) * 100) : 0;
 
+  const playback = detailPlaybackAction(item, item.totalEpisodes);
   const href = buildWatchUrl({
     sourceKey: item.sourceKey,
-    vodId: item.vodId,
-    index: item.episodeIndex,
+    vodId: item.directUrl ? undefined : item.vodId,
+    episodeUrl: item.directUrl,
+    index: playback.index,
+    position: playback.restart ? 0 : undefined,
     title: item.title,
     sourceUrl: source?.url,
     detail: source?.detail,
@@ -169,12 +204,14 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
               sourceKey: item.sourceKey,
               sourceUrl: item.sourceUrl,
               vodId: item.vodId,
+              directUrl: item.directUrl,
               title: item.title,
               pic: item.pic,
               episodeIndex: item.episodeIndex,
               totalEpisodes: item.totalEpisodes,
               playbackPosition: item.playbackPosition,
               duration: item.duration,
+              completed: item.completed,
               timestamp: item.timestamp,
             }).then(() => toast('已恢复', 'success'));
           },
@@ -184,59 +221,54 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
   };
 
   return (
-    <li className="relative group">
-      <Link
+    <li className="tv-history__item group relative">
+      <NavigationWatchLink
         href={href}
-        onClick={() => {
-          // 点击即同步一次时间戳，置顶最近观看
-          upsertHistory({ ...item, timestamp: Date.now() }).catch(() => {});
-        }}
-        className="block bg-card hover:bg-hover rounded-lg p-3 pr-10 transition-colors"
+        className="block rounded-2xl border border-line/60 bg-card/70 p-3.5 pr-12 transition-colors hover:border-content/20 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           {item.pic && !imgFailed ? (
             <SmartImage
               url={item.pic}
               mode={imageProxyMode}
               customProxy={customImageProxy}
               alt=""
-              className="w-10 h-14 object-cover rounded bg-chip"
+              className="h-20 w-14 shrink-0 rounded-xl bg-chip object-cover shadow-md shadow-black/10"
               onExhausted={() => setImgFailed(true)}
             />
           ) : (
-            <div className="w-10 h-14 rounded bg-chip flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16m10-16v16M7 8h10M7 12h10" />
+            <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-xl bg-chip">
+              <svg className="h-5 w-5 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M7 4v16m10-16v16M7 8h10M7 12h10" />
               </svg>
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-content truncate">{item.title}</div>
-            <div className="text-xs text-faint mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <div className="truncate text-base font-semibold tracking-tight text-content">{item.title}</div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-5 text-faint">
               {item.totalEpisodes > 0 && <span>第 {item.episodeIndex + 1}/{item.totalEpisodes} 集</span>}
               {hasPercent && <span>· {formatTime(item.playbackPosition)}</span>}
               <span>· {formatRelativeTime(item.timestamp)}</span>
             </div>
             {hasPercent && (
-              <div className="mt-1.5 h-1 bg-hover rounded-full overflow-hidden">
-                <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-hover">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${percent}%` }} />
               </div>
             )}
           </div>
         </div>
-      </Link>
+      </NavigationWatchLink>
       <button
+        type="button"
         className={cn(
-          'absolute right-2 top-2 p-2 rounded-full text-faint hover:text-danger',
-          'opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity'
+          'absolute right-2.5 top-2.5 inline-flex h-9 w-9 items-center justify-center rounded-full text-faint hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/60',
+          'opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-visible:opacity-100'
         )}
-        aria-label="删除记录"
+        aria-label={`删除《${item.title}》的观看记录`}
         title="删除记录（可在提示中撤销）"
         onClick={remove}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        <Icon name="close" className="h-4 w-4" />
       </button>
     </li>
   );

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-10-25T08:29:53.332395+08:00",
+  "items": [
+    {
+      "sourceUrl": "https://360zy.com/api.php/seaxml/vod",
+      "sourceId": "60387",
+      "title": "星际穿越",
+      "year": "2014",
+      "cover": "https://www.imgzy360.com:7788/upload/vod/20240722-1/f1e254522c72ef8576c24bfd6c4db0bc.jpg",
+      "type": "科幻片",
+      "remarks": "正片",
+      "doubanId": "1889243",
+      "tmdbId": 157336
+    },
+    {
+      "sourceUrl": "https://360zy.com/api.php/seaxml/vod",
+      "sourceId": "60328",
+      "title": "盗梦空间",
+      "year": "2010",
+      "cover": "https://www.imgzy360.com:7788/upload/vod/20240720-1/8ebe49f28faa0c8141f70bb24517b1dd.jpg",
+      "type": "科幻片",
+      "remarks": "正片",
+      "doubanId": "3541415",
+      "tmdbId": 27205
+    },
+    {
+      "sourceUrl": "https://360zy.com/api.php/seaxml/vod",
+      "sourceId": "71142",
+      "title": "流浪地球2",
+      "year": "2023",
+      "cover": "https://www.imgzy360.com:7788/upload/vod/20250126-1/a8b2c8679a5e7d3109d79d4a26bcfb54.jpg",
+      "type": "科幻片",
+      "remarks": "正片",
+      "doubanId": "35267208",
+      "tmdbId": 842675
+    }
+  ]
+}

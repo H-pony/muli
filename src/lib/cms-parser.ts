@@ -1,11 +1,12 @@
 import type { SearchResultItem, VideoDetail } from './types';
+import { artworkYear, sourceArtworkIds } from './artwork';
 
 /**
  * Apple CMS（苹果CMS）资源站响应解析
  * 与旧版 js/api.js 逻辑对齐，迁移为纯函数以便单元测试。
  */
 
-const M3U8_PATTERN = /\$https?:\/\/[^"'\s]+?\.m3u8/g;
+const M3U8_PATTERN = /\$https?:\/\/[^"'<>\s#$]+?\.m3u8(?:\?[^"'<>\s#]*)?/gi;
 
 const UA_HEADERS = {
   'User-Agent':
@@ -37,7 +38,8 @@ export function parseSearchList(
       name: String(vod.vod_name ?? ''),
       pic: typeof vod.vod_pic === 'string' ? vod.vod_pic : undefined,
       typeName: typeof vod.type_name === 'string' ? vod.type_name : undefined,
-      year: typeof vod.vod_year === 'string' ? vod.vod_year : undefined,
+      year: typeof vod.vod_year === 'string' ? vod.vod_year : artworkYear(vod.vod_year),
+      ...sourceArtworkIds(vod),
       area: typeof vod.vod_area === 'string' ? vod.vod_area : undefined,
       remarks: typeof vod.vod_remarks === 'string' ? vod.vod_remarks : undefined,
       sourceUrl: source.url,
@@ -59,8 +61,8 @@ export function extractEpisodesFromPlayUrl(playUrl: string): string[] {
       group
         .split('#')
         .map((ep) => {
-          const parts = ep.split('$');
-          return parts.length > 1 ? parts[1] : '';
+          const separator = ep.indexOf('$');
+          return separator >= 0 ? ep.slice(separator + 1).trim() : '';
         })
         .filter((url) => url.startsWith('http://') || url.startsWith('https://'))
     )
@@ -72,7 +74,8 @@ export function extractEpisodesFromPlayUrl(playUrl: string): string[] {
 /** 从简介文本中兜底提取 m3u8 链接 */
 export function extractM3u8FromText(text: string): string[] {
   if (!text) return [];
-  const matches = text.match(M3U8_PATTERN) || [];
+  const normalized = text.replace(/&amp;|&#38;|&#x26;/gi, '&');
+  const matches = normalized.match(M3U8_PATTERN) || [];
   return matches.map((link) => link.replace(/^\$/, ''));
 }
 
@@ -97,7 +100,8 @@ export function parseDetail(
       cover: str(vod.vod_pic),
       desc: str(vod.vod_content),
       typeName: str(vod.type_name),
-      year: str(vod.vod_year),
+      year: str(vod.vod_year) || artworkYear(vod.vod_year),
+      ...sourceArtworkIds(vod),
       area: str(vod.vod_area),
       director: str(vod.vod_director),
       actor: str(vod.vod_actor),
@@ -122,18 +126,8 @@ export function parseDetailPageHtml(
   html: string,
   source: { key: string; name: string; url: string }
 ): VideoDetail {
-  // 先尝试通用模式，再尝试非凡影视的日期哈希特征路径
-  let matches = html.match(/\$(https?:\/\/[^"'\s]+?\.m3u8)/g) || [];
-  if (matches.length === 0) {
-    matches = html.match(/\$(https?:\/\/[^"'\s]+?\/\d{8}\/\d+_[a-f0-9]+\/index\.m3u8)/g) || [];
-  }
-  // 去重并清理尾缀
-  const episodes = [...new Set(matches)].map((link) => {
-    let u = link.substring(1);
-    const parenIndex = u.indexOf('(');
-    if (parenIndex > 0) u = u.substring(0, parenIndex);
-    return u;
-  });
+  // 保留签名查询参数；部分详情页把播放信息放在转义的 JSON 字符串里。
+  const episodes = [...new Set(extractM3u8FromText(html.replace(/\\\//g, '/')))];
 
   const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
   const descMatch = html.match(/<div[^>]*class=["']sketch["'][^>]*>([\s\S]*?)<\/div>/);

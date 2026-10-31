@@ -1,0 +1,248 @@
+/* Keep the existing player hooks inside Artplayer's fullscreen root. */
+.art-video-player.bili-player-root { --art-theme: #f5f5f7 !important; background: #000; color: #fff; container-type: inline-size; }
+.bili-player-root--live .art-loading { display: none !important; }
+.bili-player-root .art-bottom, .bili-player-root .art-mask, .bili-player-root .art-state,
+.bili-player-root .art-setting, .bili-player-root .art-contextmenu, .bili-player-root .art-notice,
+.bili-player-root .art-mini-progress { display: none !important; }
+.bili-player-root .art-loading { pointer-events: none; z-index: 40; }
+.bili-player-ui {
+  --bili-accent: #f5f5f7;
+  --player-edge: clamp(12px, 2.2cqw, 36px);
+  position: absolute; inset: 0; z-index: 80; color: #f5f5f7; pointer-events: none;
+  font-family: inherit; font-size: 14px; line-height: 1.4; text-shadow: 0 1px 6px #0004; color-scheme: dark;
+}
+.bili-player-ui *, .bili-player-ui *::before { box-sizing: border-box; }
+.bili-player-ui :where(button, input) { font: inherit; }
+.bili-player-ui button {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  color: #f5f5f7; background: #ffffff0d; border: 1px solid #ffffff0d; cursor: pointer; text-shadow: none;
+  transition: background 180ms, border-color 180ms, box-shadow 180ms, transform 180ms;
+}
+.bili-player-ui button:hover { color: #fff; background: #ffffff24; border-color: #ffffff24; }
+.bili-player-ui button:active:not(:disabled) { transform: scale(.96); }
+.bili-player-ui button:focus-visible, .bili-player-ui input:focus-visible { outline: 2px solid #fff; outline-offset: 4px; box-shadow: 0 0 0 5px #ffffff12; }
+.bili-player-ui button:disabled { opacity: .32; cursor: default; }
+.bili-player-ui button:disabled:hover { background: #ffffff0d; border-color: #ffffff0d; }
+.bili-player-ui button[aria-expanded="true"] { background: #ffffff26; border-color: #ffffff38; }
+.bili-icon-button { width: 44px; height: 44px; padding: 10px; border-radius: 50%; }
+.bili-icon-button svg { width: 22px; height: 22px; }
+.bili-player-root .bili-player-ui svg { fill: none; }
+.bili-topbar {
+  position: absolute; inset: var(--player-edge) var(--player-edge) auto; display: flex; align-items: center; gap: 14px;
+  min-height: 72px; padding: 12px 14px; border: 1px solid #ffffff12; border-radius: 24px;
+  background: linear-gradient(120deg, #252527a8, #111113b8); box-shadow: 0 12px 42px #0002, inset 0 1px #ffffff08;
+  -webkit-backdrop-filter: blur(24px) saturate(140%); backdrop-filter: blur(24px) saturate(140%);
+  pointer-events: auto; transition: opacity 220ms, transform 220ms;
+}
+.bili-title { min-width: 0; flex: 1; font-size: 17px; font-weight: 550; letter-spacing: -.025em; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.bili-title span { font-weight: 400; color: #ffffff9e; }
+.bili-wordmark { margin-left: 10px; font-size: 11px; font-weight: 550; letter-spacing: .06em; color: #ffffff75; }
+.bili-bottom {
+  position: absolute; inset: auto var(--player-edge) var(--player-edge); padding: 13px 20px 15px;
+  border: 1px solid #ffffff1a; border-radius: 26px; background: linear-gradient(130deg, #2b2b2db3, #101012d9);
+  box-shadow: 0 14px 50px #0004, inset 0 1px #ffffff0a;
+  -webkit-backdrop-filter: blur(28px) saturate(140%); backdrop-filter: blur(28px) saturate(140%);
+  transition: opacity 220ms, transform 220ms;
+}
+.bili-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 48px; pointer-events: auto; }
+.bili-toolbar__left, .bili-toolbar__right { display: flex; align-items: center; gap: 10px; }
+.bili-toolbar__left { min-width: 0; flex: 1; }
+.bili-toolbar__right { flex-shrink: 0; }
+.bili-player-ui .bili-play, .bili-player-ui .bili-play:hover { width: 48px; height: 48px; padding: 13px; color: #111113; background: #f5f5f7; border-color: #ffffff80; box-shadow: 0 3px 16px #0002; }
+.bili-player-ui .bili-play:hover { background: #fff; box-shadow: 0 4px 22px #0004; }
+.bili-play svg { width: 22px; height: 22px; }
+.bili-text-button { min-height: 44px; min-width: 58px; padding: 10px 15px; border-radius: 100px; font-size: 13px; font-weight: 550; white-space: nowrap; }
+.bili-time { display: inline-flex; align-items: center; gap: 7px; margin-left: 4px; white-space: nowrap; color: #ffffff8c; font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .015em; }
+.bili-time > span:first-child { color: #f5f5f7; }
+.bili-time__divider { opacity: .55; }
+.bili-autoplay { color: #ffffff75; font-size: 11px; white-space: nowrap; margin-left: 8px; }
+.bili-volume { display: flex; align-items: center; gap: 0; }
+.bili-volume input { width: 0; max-width: 70px; opacity: 0; height: 4px; padding: 0; accent-color: var(--bili-accent); cursor: pointer; transition: width 180ms, opacity 180ms; }
+.bili-volume:hover input, .bili-volume:focus-within input { width: 64px; opacity: 1; margin-right: 12px; }
+.bili-timeline { position: relative; height: 24px; margin-bottom: 7px; pointer-events: auto; }
+.bili-timeline::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 10px; height: 4px; border-radius: 100px;
+  background: linear-gradient(to right, var(--bili-accent) 0 var(--bili-played), transparent var(--bili-played)), linear-gradient(to right, #ffffff80 0 var(--bili-buffered), #ffffff26 var(--bili-buffered));
+  transition: height 140ms, top 140ms;
+}
+.bili-timeline:hover::before, .bili-timeline:focus-within::before { top: 9px; height: 6px; }
+.bili-timeline input { appearance: none; -webkit-appearance: none; position: absolute; inset: 0; margin: 0; width: 100%; height: 24px; padding: 0; border: 0; border-radius: 100px; background: transparent; cursor: pointer; touch-action: none; }
+.bili-timeline input::-webkit-slider-runnable-track { height: 24px; background: transparent; }
+.bili-timeline input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin-top: 5px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 8px #0006; }
+.bili-timeline input::-moz-range-track { background: transparent; height: 4px; }
+.bili-timeline input::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+.bili-timeline input:disabled { cursor: default; }
+.bili-timeline input:disabled::-webkit-slider-thumb { opacity: .35; }
+.bili-seek-preview { position: absolute; bottom: 33px; transform: translateX(-50%); max-width: 100%; padding: 10px 14px; border: 1px solid #ffffff24; border-radius: 14px; background: #202022ee; box-shadow: 0 8px 24px #0003; -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); color: #fff; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.bili-live, .bili-live-time { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
+.bili-live { padding: 8px 12px; border: 1px solid #ffffff20; border-radius: 100px; background: #ffffff10; }
+.bili-live i, .bili-live-time i { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--bili-accent); box-shadow: 0 0 10px #ffffff30; }
+.bili-mini-progress { position: absolute; inset: auto 0 0; height: 2px; background: #ffffff26; opacity: 0; transition: opacity 220ms; }
+.bili-mini-progress span { display: block; height: 100%; background: var(--bili-accent); }
+.bili-player-ui[data-visible="false"] .bili-topbar { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.bili-player-ui[data-visible="false"] .bili-bottom { opacity: 0; transform: translateY(8px); pointer-events: none; }
+.bili-player-ui[data-visible="false"] .bili-bottom *, .bili-player-ui[data-visible="false"] .bili-topbar * { pointer-events: none; }
+.bili-player-ui[data-visible="false"] .bili-mini-progress { opacity: 1; }
+.bili-panel {
+  position: absolute; right: var(--player-edge); bottom: calc(var(--player-edge) + 126px); display: flex; flex-direction: column;
+  width: 248px; max-width: calc(100% - var(--player-edge) * 2); max-height: calc(100% - var(--player-edge) * 2 - 126px);
+  padding: 14px; border: 1px solid #ffffff24; border-radius: 24px;
+  background: linear-gradient(135deg, #343436ee, #1b1b1eee); box-shadow: 0 20px 64px #0006, inset 0 1px #ffffff0a;
+  -webkit-backdrop-filter: blur(32px) saturate(150%); backdrop-filter: blur(32px) saturate(150%);
+  pointer-events: auto; text-shadow: none; overflow: hidden;
+}
+.bili-panel--settings { width: 320px; }
+.bili-panel--episodes { width: 388px; }
+.bili-panel__header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 0 3px 12px 9px; margin-bottom: 7px; border-bottom: 1px solid #ffffff14; }
+.bili-panel__header strong { min-width: 0; font-size: 16px; font-weight: 550; letter-spacing: -.02em; }
+.bili-panel__header .bili-icon-button { width: 32px; height: 32px; padding: 8px; }
+.bili-panel__options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #ffffff40 transparent; padding: 5px; }
+.bili-panel__options button { min-width: 0; min-height: 43px; padding: 11px 14px; text-align: left; border-radius: 13px; font-size: 13px; }
+.bili-panel__options button:hover { background: #ffffff20; }
+.bili-panel__options button[aria-pressed="true"], .bili-panel__options button[aria-pressed="true"]:hover { color: #111113; background: #f5f5f7; border-color: #ffffff80; font-weight: 600; }
+.bili-rate-options { display: flex; flex-direction: column; gap: 6px; }
+.bili-rate-options button { justify-content: space-between; padding-inline: 15px; }
+.bili-rate-options button span { color: #ffffff75; font-size: 11px; }
+.bili-rate-options button[aria-pressed="true"] span { color: #11111399; }
+.bili-episode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.bili-episode-options button { display: block; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; border-color: #ffffff12; background: #ffffff08; text-align: center; }
+.bili-setting-options { display: flex; flex-direction: column; gap: 8px; }
+.bili-setting-options > button { justify-content: flex-start; }
+.bili-fit-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bili-fit-options button { background: #ffffff08; text-align: center; }
+.bili-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 46px; padding: 11px 13px; border-radius: 13px; background: #ffffff06; font-size: 12px; cursor: pointer; }
+.bili-setting-row input { width: 17px; height: 17px; flex-shrink: 0; margin: 0; accent-color: var(--bili-accent); }
+.bili-shortcut-hint { margin: 9px 8px 4px; color: #ffffff75; font-size: 11px; line-height: 1.9; }
+.bili-player-hint { position: absolute; left: 50%; top: 50%; z-index: 95; width: max-content; max-width: calc(100% - 40px); transform: translate(-50%, -50%); padding: 14px 22px; border: 1px solid #ffffff24; border-radius: 18px; background: #202022d9; box-shadow: 0 12px 36px #0004; -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); color: #fff; text-align: center; font-size: 14px; pointer-events: none; }
+@container (min-width: 1600px) {
+  .bili-topbar { min-height: 82px; padding: 16px 20px; }
+  .bili-title { font-size: 21px; }
+  .bili-bottom { padding: 16px 26px 20px; }
+  .bili-toolbar { min-height: 54px; }
+  .bili-toolbar__left, .bili-toolbar__right { gap: 14px; }
+  .bili-icon-button { width: 48px; height: 48px; padding: 12px; }
+  .bili-player-ui .bili-play, .bili-player-ui .bili-play:hover { width: 54px; height: 54px; }
+  .bili-text-button { min-height: 48px; padding-inline: 20px; font-size: 15px; }
+  .bili-time { font-size: 14px; }
+  .bili-panel { bottom: calc(var(--player-edge) + 144px); max-height: calc(100% - var(--player-edge) * 2 - 144px); }
+}
+@container (max-width: 1080px) {
+  .bili-autoplay { display: none !important; }
+  .bili-toolbar { flex-wrap: wrap; }
+  .bili-toolbar__left { flex: 1 1 auto; }
+  .bili-toolbar__right { max-width: 100%; margin-left: auto; }
+  .bili-toolbar, .bili-toolbar__left, .bili-toolbar__right { gap: 7px; }
+  .bili-text-button { min-width: 52px; padding-inline: 11px; }
+  .bili-icon-button { width: 40px; height: 40px; padding: 9px; }
+  .bili-bottom { padding-inline: 15px; }
+}
+@container (max-width: 799px) {
+  .bili-wordmark { display: none !important; }
+  .bili-topbar { min-height: 62px; padding: 9px 11px; border-radius: 20px; gap: 10px; }
+  .bili-title { font-size: 15px; }
+  .bili-time { gap: 5px; font-size: 11px; }
+  .bili-toolbar, .bili-toolbar__left, .bili-toolbar__right { gap: 5px; }
+}
+@container (max-width: 639px) {
+  .bili-player-ui { --player-edge: 8px; }
+  .bili-topbar { inset: 0 0 auto; min-height: 58px; padding: 8px 10px 13px; border: 0; border-radius: 0; background: linear-gradient(#000a, #0005 65%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; gap: 8px; }
+  .bili-title { font-size: 13px; }
+  .bili-web-button, .bili-pip-button, .bili-settings-button { display: none !important; }
+  .bili-volume input { display: none; }
+  .bili-bottom { padding: 6px 10px 9px; border-radius: 18px; }
+  .bili-toolbar { flex-wrap: wrap; gap: 6px 8px; min-height: 38px; }
+  .bili-toolbar__left { flex: 1 1 auto; gap: 6px; }
+  .bili-toolbar__right { max-width: 100%; margin-left: auto; flex-wrap: wrap; gap: 4px; }
+  .bili-icon-button { width: 34px; height: 34px; padding: 7px; }
+  .bili-icon-button svg { width: 20px; height: 20px; }
+  .bili-player-ui .bili-play, .bili-player-ui .bili-play:hover { width: 38px; height: 38px; padding: 10px; }
+  .bili-text-button { min-height: 34px; min-width: 42px; padding: 7px 9px; font-size: 11px; }
+  .bili-time { margin-left: 1px; gap: 4px; font-size: 10px; }
+  .bili-live { padding: 6px 9px; font-size: 10px; }
+  .bili-live-time { gap: 6px; font-size: 10px; }
+  .bili-timeline { height: 20px; margin-bottom: 3px; }
+  .bili-timeline::before { top: 8px; height: 3px; }
+  .bili-timeline:hover::before, .bili-timeline:focus-within::before { top: 7px; height: 5px; }
+  .bili-timeline input, .bili-timeline input::-webkit-slider-runnable-track { height: 20px; }
+  .bili-timeline input::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: 4px; }
+  .bili-panel { right: 8px; bottom: 8px; max-width: calc(100% - 16px); max-height: calc(100% - 16px); padding: 10px; border-radius: 20px; }
+  .bili-panel__header { padding-bottom: 7px; margin-bottom: 3px; }
+  .bili-panel__header strong { font-size: 14px; }
+  .bili-panel__options { padding: 4px; }
+  .bili-panel__options button { min-height: 36px; padding: 8px 10px; font-size: 12px; border-radius: 11px; }
+  .bili-episode-options { gap: 6px; }
+  .bili-setting-row { min-height: 38px; padding: 9px 10px; font-size: 11px; }
+  .bili-seek-preview { bottom: 27px; padding: 7px 10px; border-radius: 11px; font-size: 10px; }
+  .bili-player-hint { padding: 11px 16px; border-radius: 15px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bili-player-ui *, .bili-player-ui *::before { transition: none !important; }
+  .bili-player-ui button:active:not(:disabled) { transform: none; }
+}
+
+/* The watch page has its own quiet frame around the shared media controls. */
+.tv-watch-page {
+  --c-page: 7 7 10; --c-surface: 22 22 27; --c-surface-raised: 30 30 36;
+  --c-chip: 37 37 43; --c-hover: 51 51 59; --c-line: 58 58 67;
+  --c-content: 245 245 247; --c-muted: 165 165 178; --c-faint: 134 134 149;
+  --c-accent: 245 245 247; --c-accent-hover: 255 255 255; --c-on-accent: 20 20 25;
+  color: #f5f5f7; background: #07070a; color-scheme: dark;
+}
+.tv-watch-page::before { height: 800px; background: radial-gradient(ellipse at 48% 0, #8b8baf12, transparent 68%); }
+.tv-watch-page .tv-watch-header { top: 18px; width: calc(100% - 64px); max-width: 1616px; margin: 24px auto 0; border: 1px solid #ffffff12; border-radius: 24px; background: #1b1b20b8; box-shadow: 0 10px 40px #0002, inset 0 1px #ffffff08; -webkit-backdrop-filter: blur(28px) saturate(140%); backdrop-filter: blur(28px) saturate(140%); }
+.tv-watch-header__inner { display: flex; align-items: center; gap: 12px; min-height: 82px; padding: 14px 18px; }
+.tv-watch-header__title { min-width: 0; flex: 1; padding-left: 5px; }
+.tv-watch-header__title h1 { overflow: hidden; margin: 0; color: #f5f5f7; font-size: 17px; font-weight: 550; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
+.tv-watch-header__title p { overflow: hidden; margin: 5px 0 0; color: #ffffff70; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.tv-watch-header__actions { display: flex; align-items: center; flex-shrink: 0; gap: 8px; margin-left: auto; }
+.tv-watch-page .tv-watch-action { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 8px; min-height: 42px; padding: 10px 17px; border: 1px solid #ffffff14; border-radius: 100px; background: #ffffff09; color: #e3e3e8; font-size: 12px; font-weight: 500; transition: background 180ms, border-color 180ms, transform 180ms; }
+.tv-watch-page .tv-watch-action:hover { border-color: #ffffff26; background: #ffffff1c; color: #fff; }
+.tv-watch-page .tv-watch-action:disabled { opacity: .3; cursor: default; }
+.tv-watch-page .tv-watch-action--icon { width: 42px; height: 42px; padding: 10px; }
+.tv-watch-page .tv-watch-action:focus-visible, .tv-watch-episode:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.tv-watch-page .tv-watch-shell { width: 100%; max-width: 1680px; padding: 32px 32px 72px; }
+.tv-watch-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; align-items: start; gap: 28px; }
+.tv-watch-screen { min-width: 0; }
+.tv-watch-page .tv-watch-stage { width: 100%; overflow: hidden; border: 1px solid #ffffff14; border-radius: 26px; box-shadow: 0 28px 80px -30px #000b; }
+.tv-watch-transport { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 20px; }
+.tv-watch-autoplay { display: inline-flex; align-items: center; gap: 9px; margin-left: auto; color: #ffffff85; font-size: 12px; cursor: pointer; }
+.tv-watch-autoplay input { width: 16px; height: 16px; margin: 0; accent-color: #f5f5f7; }
+.tv-watch-episodes { min-width: 0; padding: 24px 21px; border: 1px solid #ffffff12; border-radius: 26px; background: linear-gradient(145deg, #202025b3, #151519cc); box-shadow: inset 0 1px #ffffff06; }
+.tv-watch-episodes__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 8px; margin-bottom: 23px; }
+.tv-watch-episodes__header h2 { margin: 0; font-size: 18px; font-weight: 550; letter-spacing: -.025em; }
+.tv-watch-page .tv-watch-action--sort { min-height: 32px; padding: 7px 11px; font-size: 10px; }
+.tv-watch-episodes__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 9px; max-height: 58vh; overflow-y: auto; padding: 5px; margin: -5px; scrollbar-width: thin; scrollbar-color: #ffffff30 transparent; }
+.tv-watch-episode { display: inline-flex; align-items: center; justify-content: center; min-width: 0; min-height: 43px; padding: 8px; border: 1px solid #ffffff0d; border-radius: 13px; background: #ffffff08; color: #c0c0cb; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; transition: background 180ms, border-color 180ms, transform 180ms; }
+.tv-watch-episode:hover { background: #ffffff18; border-color: #ffffff24; color: #fff; }
+.tv-watch-episode.episode-active { box-shadow: 0 4px 15px #0002; font-weight: 650; }
+.tv-watch-episodes__hint { margin: 23px 0 0; padding-top: 17px; border-top: 1px solid #ffffff0d; color: #ffffff55; font-size: 10px; line-height: 2; }
+.tv-watch-fallback { display: flex; align-items: center; justify-content: center; padding: 24px; }
+@media (max-width: 1279px) {
+  .tv-watch-layout { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .tv-watch-episodes { padding: 25px; }
+  .tv-watch-episodes__header { margin-bottom: 20px; }
+  .tv-watch-episodes__grid { grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); max-height: 320px; }
+  .tv-watch-episodes__hint { margin-top: 20px; padding-top: 15px; }
+}
+@media (max-width: 639px) {
+  .tv-watch-page .tv-watch-header { top: 10px; width: calc(100% - 24px); margin-top: 12px; border-radius: 20px; }
+  .tv-watch-header__inner { min-height: 70px; padding: 12px 10px; gap: 7px; }
+  .tv-watch-header__title { padding-left: 1px; }
+  .tv-watch-header__title h1 { font-size: 13px; }
+  .tv-watch-header__title p { margin-top: 4px; font-size: 10px; }
+  .tv-watch-header__actions { gap: 5px; }
+  .tv-watch-page .tv-watch-action--icon, .tv-watch-header__actions .tv-watch-action { width: 34px; height: 34px; min-height: 34px; padding: 8px; }
+  .tv-watch-page .tv-watch-shell { padding: 22px 12px 44px; }
+  .tv-watch-page .tv-watch-stage { border-radius: 19px; }
+  .tv-watch-layout { gap: 25px; }
+  .tv-watch-transport { gap: 7px; margin-top: 16px; }
+  .tv-watch-transport .tv-watch-action { min-height: 38px; padding: 9px 14px; font-size: 11px; }
+  .tv-watch-autoplay { gap: 7px; font-size: 11px; }
+  .tv-watch-episodes { padding: 22px 19px; border-radius: 22px; }
+  .tv-watch-episodes__header h2 { font-size: 17px; }
+  .tv-watch-episodes__grid { grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); gap: 8px; }
+  .tv-watch-episodes__hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tv-watch-action, .tv-watch-episode { transition: none !important; }
+}

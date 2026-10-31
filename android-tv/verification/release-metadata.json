@@ -1,0 +1,36 @@
+[
+  {
+    "flavor": "tv",
+    "label": "空我TV 电视版",
+    "applicationId": "org.kongwotv.tv",
+    "versionName": "2.16.12",
+    "versionCode": 2161203,
+    "minSdk": 21,
+    "targetSdk": 35,
+    "path": "/Users/kongwo/Documents/项目/LibreTV/dist/空我TV-AndroidTV-2.16.12.apk",
+    "bytes": 4744873,
+    "sha256": "cdcc7d757d406f6f05b97163c20ab7440ea76aaa5acc33701bac93bbc226d944",
+    "certificateSha256": "61d0e5ca3f17e6e8ec9fb5e3fb49b6be58de6582d2a49a8023589d32726cc4db",
+    "sameSignerAsPreviousRelease": true,
+    "signatureV1": true,
+    "signatureV2": true,
+    "signatureV3": false
+  },
+  {
+    "flavor": "mobile",
+    "label": "空我TV",
+    "applicationId": "org.kongwotv.mobile",
+    "versionName": "2.16.12",
+    "versionCode": 2161203,
+    "minSdk": 21,
+    "targetSdk": 35,
+    "path": "/Users/kongwo/Documents/项目/LibreTV/dist/空我TV-Android-2.16.12.apk",
+    "bytes": 4742839,
+    "sha256": "9371a65a9e7def92e0d530be9eb1af5f4350cbcd4b38ae5c8a4e9c0e4872eeee",
+    "certificateSha256": "61d0e5ca3f17e6e8ec9fb5e3fb49b6be58de6582d2a49a8023589d32726cc4db",
+    "sameSignerAsPreviousRelease": true,
+    "signatureV1": true,
+    "signatureV2": true,
+    "signatureV3": false
+  }
+]

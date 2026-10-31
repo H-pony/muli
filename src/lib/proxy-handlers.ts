@@ -3,6 +3,7 @@ import { guardRequest, jsonError } from '@/lib/api-guard';
 import { checkLiveUrlAllowed, isBlockedByDNS, isValidProxyUrl } from '@/lib/ssrf';
 import { fetchWithSafeRedirects } from '@/lib/fetch-utils';
 import { rewriteM3u8, LIVE_STREAM_BASE } from '@/lib/m3u8';
+import { readHlsResponse } from '@/lib/hls-response';
 
 /**
  * 代理目标地址的两种传入形式：
@@ -114,14 +115,11 @@ export async function handleProxyRequest(req: Request, targetUrl: string): Promi
   }
 
   const contentType = response.headers.get('content-type') || '';
-  const isM3u8 =
-    contentType.includes('mpegurl') || contentType.includes('x-mpegurl') ||
-    targetUrl.toLowerCase().endsWith('.m3u8');
+  const { manifest, body } = await readHlsResponse(response, targetUrl, finalUrl);
 
-  // m3u8 文本：重写为代理地址（以重定向后的最终 URL 为 base 解析相对地址）
-  if (isM3u8) {
-    const text = await response.text();
-    return new NextResponse(rewriteM3u8(text, finalUrl), {
+  // 仅重写真实的成功 HLS 响应，404/403 错误页保留原始状态与内容。
+  if (manifest !== null) {
+    return new NextResponse(rewriteM3u8(manifest, finalUrl), {
       status: response.status,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
@@ -141,11 +139,12 @@ export async function handleProxyRequest(req: Request, targetUrl: string): Promi
   // 图片基本不变：长缓存交给浏览器与边缘 CDN（分片 / key 仍保守 1 小时）
   outHeaders.set(
     'Cache-Control',
-    contentType.startsWith('image/') ? 'public, max-age=2592000' : 'public, max-age=3600'
+    !response.ok ? 'no-store' : contentType.startsWith('image/') ? 'public, max-age=2592000' : 'public, max-age=3600'
   );
   outHeaders.set('Access-Control-Allow-Origin', '*');
+  if (!response.ok) outHeaders.set('X-Upstream-Status', String(response.status));
 
-  return new NextResponse(response.body, {
+  return new NextResponse(body, {
     status: response.status,
     headers: outHeaders,
   });
@@ -211,15 +210,12 @@ export async function handleLiveStreamRequest(req: Request, targetUrl: string): 
   }
 
   const contentType = response.headers.get('content-type') || '';
-  const isM3u8 =
-    contentType.includes('mpegurl') || contentType.includes('x-mpegurl') ||
-    targetUrl.toLowerCase().split('?')[0].endsWith('.m3u8');
+  const { manifest, body } = await readHlsResponse(response, targetUrl, finalUrl);
 
   // HLS manifest：重写变体/分片地址指向本路由，保证后续请求同源同鉴权。
   // 关键：以重定向后的最终 URL 为 base 解析相对地址（gslb 调度源 302 后路径会变）
-  if (isM3u8) {
-    const text = await response.text();
-    return new NextResponse(rewriteM3u8(text, finalUrl, 0, LIVE_STREAM_BASE), {
+  if (manifest !== null) {
+    return new NextResponse(rewriteM3u8(manifest, finalUrl, 0, LIVE_STREAM_BASE), {
       status: response.status,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
@@ -235,7 +231,7 @@ export async function handleLiveStreamRequest(req: Request, targetUrl: string): 
   outHeaders.set('Cache-Control', 'no-store, no-transform');
   outHeaders.set('X-Accel-Buffering', 'no');
 
-  return new NextResponse(response.body, {
+  return new NextResponse(body, {
     status: response.status,
     headers: outHeaders,
   });

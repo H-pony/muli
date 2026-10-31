@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeStreamUrl, parseM3u } from './m3u-parser';
+import { normalizeStreamUrl, parseM3u, parseM3uEpg } from './m3u-parser';
 
 describe('normalizeStreamUrl', () => {
   it('相对地址按 base 解析', () => {
@@ -18,6 +18,58 @@ describe('normalizeStreamUrl', () => {
     expect(normalizeStreamUrl('')).toBeUndefined();
     expect(normalizeStreamUrl('  ')).toBeUndefined();
     expect(normalizeStreamUrl('not a url')).toBeUndefined();
+  });
+});
+
+describe('parseM3uEpg', () => {
+  it.each(['x-tvg-url', 'url-tvg', 'tvg-url'])('识别订阅头的 %s 属性', (attribute) => {
+    expect(parseM3uEpg(`#EXTM3U ${attribute}="https://epg.example.com/guide.xml.gz"`)).toBe(
+      'https://epg.example.com/guide.xml.gz'
+    );
+  });
+
+  it.each(["url-tvg='../guide.xml.gz'", 'url-tvg=../guide.xml.gz'])(
+    '兼容单引号和无引号属性：%s',
+    (attribute) => {
+      expect(parseM3uEpg(`#EXTM3U ${attribute}`, 'https://feeds.example.com/tv/list.m3u')).toBe(
+        'https://feeds.example.com/guide.xml.gz'
+      );
+    }
+  );
+
+  it('兼容 BOM、大小写、CRLF 和协议相对地址', () => {
+    expect(parseM3uEpg('\uFEFF#extm3u X-TVG-URL = "//epg.example.com/guide.xml"\r\n', 'https://feeds.example.com/list.m3u')).toBe(
+      'https://epg.example.com/guide.xml'
+    );
+  });
+
+  it.each(['javascript:alert(1)', 'data:text/xml,test', 'file:///tmp/epg.xml', 'ftp://epg.example.com/guide.xml'])(
+    '拒绝非 http(s) 节目单：%s',
+    (url) => {
+      expect(parseM3uEpg(`#EXTM3U x-tvg-url="${url}"`, 'https://feeds.example.com/list.m3u')).toBeUndefined();
+    }
+  );
+
+  it('多个节目单按优先属性读取首个地址', () => {
+    expect(parseM3uEpg(
+      '#EXTM3U url-tvg="https://other.example.com/guide.xml" x-tvg-url="/epg.xml, https://backup.example.com/epg.xml"',
+      'https://feeds.example.com/list.m3u'
+    )).toBe('https://feeds.example.com/epg.xml');
+  });
+
+  it('优先属性无效时继续检查其他别名', () => {
+    expect(parseM3uEpg(
+      '#EXTM3U x-tvg-url="data:text/xml,test" url-tvg="https://epg.example.com/guide.xml"',
+      'https://feeds.example.com/list.m3u'
+    )).toBe('https://epg.example.com/guide.xml');
+  });
+
+  it('未提供有效订阅头时保持可选，不读取频道属性', () => {
+    expect(parseM3uEpg('')).toBeUndefined();
+    expect(parseM3uEpg('#EXTM3U')).toBeUndefined();
+    expect(parseM3uEpg('#EXTM3U x-tvg-url=""')).toBeUndefined();
+    expect(parseM3uEpg('#EXTM3U x-tvg-url="/epg.xml"')).toBeUndefined();
+    expect(parseM3uEpg('#EXTM3U\n#EXTINF:-1 x-tvg-url="https://epg.example.com/guide.xml",CCTV1\nhttps://stream.example.com/live.m3u8')).toBeUndefined();
   });
 });
 

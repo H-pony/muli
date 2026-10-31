@@ -1,0 +1,16 @@
+Bundled home film backgrounds (2026-10-25)
+-----------------------------------------
+assets/home-featured/157336.jpg — Interstellar (2014), TMDB 157336
+https://image.tmdb.org/t/p/original/8sNiAPPYU14PUepFNeSNGUTiHW.jpg
+assets/home-featured/27205.jpg — Inception (2010), TMDB 27205
+https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg
+assets/home-featured/842675.jpg — The Wandering Earth II (2023), TMDB 842675
+https://image.tmdb.org/t/p/original/94cS0mzODEoNIXFT7nhPcI8V4IJ.jpg
+
+These are the existing project research originals, copied without re-encoding.
+All three are JPEG, 3840 x 2160. Identity metadata is maintained separately
+in shared/artwork-catalog.json; file digests and original source references
+are recorded in artifacts/tv-reference-ui-20261025/bundled-backdrops.json.
+Film artwork remains attributed to its respective rights holders and is
+separate from the client software's AGPL license.
+This product uses the TMDB API but is not endorsed or certified by TMDB.

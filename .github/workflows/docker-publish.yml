@@ -24,8 +24,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Docker Hub 双发布目标（固定仓库，无需按 owner 推导）
-  DOCKERHUB_IMAGE: docker.io/bestzwei/libretv
+  # 可选：设置自己的 Docker Hub 镜像地址到仓库变量 DOCKERHUB_IMAGE
+  DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
 
 jobs:
   # 先跑类型检查与单测，避免把坏版本推成镜像
@@ -66,7 +66,9 @@ jobs:
       # GHCR 镜像名不允许大写，统一转小写（owner/Repo → owner/repo）
       - name: 计算镜像名
         id: image
-        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          image_owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "name=${REGISTRY}/${image_owner}/kongwotv" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -117,7 +119,7 @@ jobs:
     env:
       # secrets 上下文不能直接用于 step 的 if（Unrecognized named-value），
       # 在 job 级 env 先行求值为 true/false，各步骤再用 env 上下文判断
-      HAS_DOCKERHUB_CREDS: ${{ secrets.DOCKER_PASSWORD != '' }}
+      HAS_DOCKERHUB_CREDS: ${{ secrets.DOCKER_PASSWORD != '' && vars.DOCKERHUB_IMAGE != '' }}
     steps:
       - name: 下载各架构 digest
         uses: actions/download-artifact@v4
@@ -128,7 +130,9 @@ jobs:
 
       - name: 计算镜像名
         id: image
-        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          image_owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "name=${REGISTRY}/${image_owner}/kongwotv" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 

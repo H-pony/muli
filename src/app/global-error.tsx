@@ -21,23 +21,26 @@ export default function GlobalError({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 12,
-          background: '#0b101a',
-          color: '#c9d1d9',
-          fontFamily: 'system-ui, sans-serif',
+          gap: 18,
+          background: '#08090b',
+          color: '#f5f5f7',
+          fontFamily: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif',
           textAlign: 'center',
-          padding: 16,
+          padding: 24,
         }}
       >
         <p style={{ margin: 0, fontSize: 14 }}>应用发生严重错误，请刷新页面重试。</p>
         <button
           onClick={reset}
           style={{
-            padding: '6px 16px',
-            borderRadius: 6,
-            border: '1px solid #2a3441',
-            background: '#151b26',
-            color: '#c9d1d9',
+            minHeight: 46,
+            padding: '10px 28px',
+            borderRadius: 12,
+            border: '1px solid #ffffff20',
+            background: '#f5f5f7',
+            color: '#141417',
+            font: 'inherit',
+            fontWeight: 600,
             cursor: 'pointer',
           }}
         >

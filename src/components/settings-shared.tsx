@@ -71,7 +71,7 @@ export function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-0.5">
+    <div className="tv-setting-row flex items-center justify-between gap-4 py-0.5">
       <div className="min-w-0">
         <div className="text-sm text-content">{label}</div>
         <div className="text-xs text-faint">{description}</div>
@@ -100,7 +100,7 @@ export function Switch({
       aria-label={label}
       title={title ?? label}
       className={cn(
-        'relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200',
+        'tv-switch relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         checked ? 'bg-accent' : 'bg-chip ring-1 ring-inset ring-line'
       )}
@@ -136,7 +136,7 @@ export function SelectRow({
   description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-0.5">
+    <div className="tv-setting-row flex items-center justify-between gap-4 py-0.5">
       <div className="min-w-0">
         <div className="text-sm text-content">{label}</div>
         {description && <div className="text-xs text-faint">{description}</div>}

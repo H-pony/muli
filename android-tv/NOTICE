@@ -1,0 +1,15 @@
+幕里 Android client
+
+This Android TV client is a local extension based on the LibreTV project and its source/data models.
+Original project: https://github.com/LibreSpark/LibreTV
+Original project copyright remains with its respective contributors.
+Client code in this directory is licensed under AGPL-3.0-or-later. See LICENSE.
+
+Playback components: AndroidX Media3 / ExoPlayer.
+Copyright The Android Open Source Project and its contributors.
+https://github.com/androidx/media
+Licensed under the Apache License, Version 2.0.
+The Apache license text is included in app/src/main/assets/THIRD_PARTY_LICENSES.txt.
+
+The included source addresses refer to independently operated public services.
+This package contains source configuration, not programme files or a computer-hosted playback server.

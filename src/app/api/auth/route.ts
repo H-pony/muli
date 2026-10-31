@@ -5,10 +5,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   if (!isPasswordConfigured()) {
-    return NextResponse.json(
-      { success: false, error: '服务器未设置 PASSWORD 环境变量，请联系管理员配置' },
-      { status: 503 }
-    );
+    return NextResponse.json({ success: true });
   }
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown';
@@ -53,7 +50,7 @@ export async function POST(req: Request) {
 
 /** GET：查询当前会话状态 */
 export async function GET(req: Request) {
-  const verified = sessionFromCookieHeader(req.headers.get('cookie'));
+  const verified = !isPasswordConfigured() || sessionFromCookieHeader(req.headers.get('cookie'));
   return NextResponse.json({ success: true, verified });
 }
 

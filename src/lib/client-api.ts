@@ -2,6 +2,8 @@
 
 import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload } from './types';
 
+import { discoverySearchParams, type DiscoveryFilters, type DiscoveryResponse } from './discovery-model';
+
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
  * 替代旧版在每个函数里手工检查 isPasswordVerified 的散弹式写法。
@@ -15,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-const UNAUTHORIZED_EVENT = 'libretv:unauthorized';
+const UNAUTHORIZED_EVENT = 'kongwotv:unauthorized';
 
 /** 单条测活结果（/api/live/probe，JSON 与 NDJSON 流共用同一结构） */
 export interface LiveProbeResult {
@@ -44,15 +46,11 @@ export function onUnauthorized(handler: (event: CustomEvent) => void): () => voi
   return () => window.removeEventListener(UNAUTHORIZED_EVENT, wrapped);
 }
 
-/** 401/503 统一处理：分发全局事件打开登录框并抛 ApiError（普通与流式请求共用） */
+/** 仅会话失效的 401 触发登录；503 等服务错误按原响应展示。 */
 function throwForAuthStatus(res: Response): void {
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
     throw new ApiError('需要登录', 401);
-  }
-  if (res.status === 503) {
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT, { detail: 'setup' }));
-    throw new ApiError('服务器未配置密码', 503);
   }
 }
 
@@ -151,6 +149,14 @@ export const api = {
     return request<DoubanResponse>(`/api/douban?${sp.toString()}`, { signal });
   },
 
+  /** 分类片库：类型/地区/年份/排序与分页均由服务端获取真实结果。 */
+  discover: (filters: DiscoveryFilters, start = 0, count = 24, signal?: AbortSignal) => {
+    const params = discoverySearchParams(filters);
+    params.set('start', String(start));
+    params.set('count', String(count));
+    return request<DiscoveryResponse>(`/api/discover?${params.toString()}`, { signal });
+  },
+
   /** Bangumi 每日放送（免 key），首页推荐的另一数据源 */
   bangumiCalendar: (signal?: AbortSignal) => request<BangumiCalendarResponse>('/api/bangumi/calendar', { signal }),
 
@@ -159,6 +165,21 @@ export const api = {
     const sp = new URLSearchParams({ id });
     return request<DoubanResponse>(`/api/hot-list?${sp.toString()}`, { signal });
   },
+
+  /** 榜单影片的豆瓣元数据，按需加载剧情与演职员。 */
+  catalog: (id: string, signal?: AbortSignal) => {
+    const sp = new URLSearchParams({ id });
+    return request<{ item: import('./types').DoubanItem }>(`/api/catalog?${sp.toString()}`, { signal });
+  },
+
+  /** 高清图片元数据，凭据仅放 POST 请求体，失败不影响播放详情。 */
+  artwork: (identity: import('./artwork').ArtworkIdentity, credential = '', signal?: AbortSignal) =>
+    request<import('./artwork-provider').ArtworkResult>('/api/artwork', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...identity, ...(credential ? { credential } : {}) }), signal,
+    }),
+
+  artworkConfiguration: () => request<{ configured: boolean }>('/api/artwork'),
 
   /** 换源：按标题跨源搜索并取详情，附带接口耗时（测速）；支持 signal 以便关闭弹窗时中止在途请求 */
   detailSpeed: async (id: string, source: SourceConfig, signal?: AbortSignal) => {
@@ -179,7 +200,7 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
-  /** 拉取远程数据源订阅（自动识别 LibreTV-SourceList JSON 与 TVBOX 配置 JSON） */
+  /** 拉取远程数据源订阅（自动识别 幕里-SourceList JSON 与 TVBOX 配置 JSON） */
   fetchSourceList: (url: string) => {
     const sp = new URLSearchParams({ url });
     return request<SourceListPayload>(`/api/source-list?${sp.toString()}`);
@@ -287,8 +308,8 @@ async function searchStream(
     throwForAuthStatus(res);
     if (!res.ok || !res.body) throw new ApiError(`请求失败 (${res.status})`, res.status);
 
-    // done 事件缺失（流被截断）时退化为空结果，不让整次搜索报错
-    let final: SearchResponse = { list: [], failures: [] };
+    // 没有 done 不能当作成功的空搜索：避免已显示的逐源结果被清空。
+    let final: SearchResponse | undefined;
     await consumeNdjson<SearchStreamEvent>(res, (event) => {
       if (event.type === 'source') {
         onSource(event);
@@ -296,6 +317,7 @@ async function searchStream(
         final = { list: event.list, failures: event.failures };
       }
     });
+    if (!final) throw new ApiError('搜索连接中断，请重试', 0);
     return final;
   }
 

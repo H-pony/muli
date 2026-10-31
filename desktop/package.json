@@ -1,0 +1,27 @@
+{
+  "name": "muli-desktop",
+  "version": "2.16.12",
+  "private": true,
+  "description": "幕里独立桌面客户端，内置本地 Next.js 服务",
+  "license": "AGPL-3.0-or-later",
+  "author": "幕里 contributors",
+  "main": "main.cjs",
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
+    "start": "electron .",
+    "prepare:server": "node scripts/stage-server.cjs",
+    "prepare:icons": "node scripts/create-icons.cjs",
+    "build": "node scripts/build.cjs",
+    "build:mac": "node scripts/build.cjs mac",
+    "build:win": "node scripts/build.cjs win",
+    "build:linux": "node scripts/build.cjs linux",
+    "self-test": "node scripts/self-test.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.8.0",
+    "electron-builder": "26.15.3",
+    "png-to-ico": "3.0.1",
+    "resedit": "3.0.2",
+    "sharp": "0.35.5"
+  }
+}

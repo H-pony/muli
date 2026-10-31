@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { readBrandStorage } from '@/lib/brand';
 
 /**
  * 主题上下文：light / dark / system，持久化到 localStorage，默认 dark。
@@ -8,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
  */
 
 export type ThemeChoice = 'light' | 'dark' | 'system';
-const STORAGE_KEY = 'libretv-theme';
+const STORAGE_KEY = 'kongwotv-theme';
 
 interface ThemeContextValue {
   theme: ThemeChoice;
@@ -41,13 +42,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [resolved, setResolved] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
-    const stored = (localStorage.getItem(STORAGE_KEY) as ThemeChoice | null) || 'dark';
+    const stored = (readBrandStorage(STORAGE_KEY) as ThemeChoice | null) || 'dark';
     setThemeState(stored);
     setResolved(apply(stored));
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => {
-      const current = (localStorage.getItem(STORAGE_KEY) as ThemeChoice | null) || 'dark';
+      const current = (readBrandStorage(STORAGE_KEY) as ThemeChoice | null) || 'dark';
       if (current === 'system') {
         setResolved(apply('system'));
       }

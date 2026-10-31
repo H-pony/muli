@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import Image from 'next/image';
+import { useBodyScrollLock } from './use-body-scroll-lock';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ThemeToggle } from './theme';
 import { SourceManagerDrawer } from './source-manager';
@@ -9,143 +11,138 @@ import { HistoryPanel } from './history-panel';
 import { requestShowDownloadManager } from './download-manager';
 import { Icon } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
+import { isTopFocusLayer, useFocusTrap } from './use-focus-trap';
 import { cn } from '@/lib/utils';
 
-/** 顶部导航：Logo、搜索框（首页外）、历史、设置 */
-export function Header({ showSearch = false }: { showSearch?: boolean }) {
-  const router = useRouter();
+type HeaderPage = 'home' | 'movies' | 'tv' | 'shows' | 'live' | 'about';
+const navigationItems = [
+  { page: 'home', href: '/', label: '立即观看', icon: <><rect x="3" y="4" width="18" height="14" rx="3" /><path d="m10 8 5 3-5 3M8 21h8" /></> },
+  { page: 'movies', href: '/?view=movies', label: '电影', icon: <><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M7 4v16M17 4v16M3 9h4M17 9h4M3 15h4M17 15h4" /></> },
+  { page: 'tv', href: '/?view=tv', label: '剧集', icon: <><rect x="3" y="5" width="18" height="13" rx="3" /><path d="M8 21h8M12 18v3" /></> },
+  { page: 'shows', href: '/?view=shows', label: '综艺', icon: <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z" /> },
+  { page: 'live', href: '/live', label: '电视直播', icon: <><circle cx="12" cy="12" r="1.5" /><path d="M5.6 5.6a9 9 0 0 0 0 12.8m12.8-12.8a9 9 0 0 1 0 12.8M8.5 8.5a5 5 0 0 0 0 7m7-7a5 5 0 0 1 0 7" /></> },
+] as const;
+
+function NavIcon({ children }: { children: ReactNode }) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.65} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
+}
+
+/** Persistent content sidebar on large screens, touch tab bar on phones. */
+export function Header({ showSearch = false, activePage }: { showSearch?: boolean; activePage?: HeaderPage | null }) {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  // 与首页搜索框共用同一套「最近搜索」下拉逻辑
-  const searchHistory = useSearchHistory(query);
+  const [searchOpen, setSearchOpen] = useState(showSearch);
+  const currentPage = activePage === null ? undefined : activePage ?? (pathname === '/' ? 'home' : pathname.startsWith('/live') ? 'live' : pathname.startsWith('/about') ? 'about' : undefined);
 
-  const submitSearch = (text: string) => {
-    const q = text.trim().slice(0, 100);
-    if (!q) return;
-    searchHistory.close();
-    router.push(`/?s=${encodeURIComponent(q)}`, { scroll: false });
-    // 顶栏搜索一并写入最近搜索（此前只有首页会记录）
-    searchHistory.record(q);
-  };
-
-  const pickHistory = (text: string) => {
-    setQuery(text);
-    submitSearch(text);
-  };
+  useEffect(() => {
+    const openSettings = () => setSettingsOpen(true);
+    window.addEventListener('kongwotv:open-settings', openSettings);
+    return () => window.removeEventListener('kongwotv:open-settings', openSettings);
+  }, []);
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/" aria-label="LibreTV 首页" className="flex items-center shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/icon-512.png" alt="LibreTV" className="w-7 h-7 rounded-lg" />
-          </Link>
-
-          {showSearch && (
-            <form
-              className="flex-1 max-w-xl hidden sm:block"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitSearch(query);
-              }}
-            >
-              <div ref={searchHistory.containerRef} className="relative">
-                <input
-                  className={cn(
-                    'input w-full h-9',
-                    // 展开时：上圆角与外框沿用聚焦样式，底边改为内部分隔线，与下拉拼成同一面板
-                    searchHistory.visible &&
-                      'rounded-b-none border-accent border-b-line bg-surface-raised focus-visible:ring-0'
-                  )}
-                  aria-label="搜索影片"
-                  placeholder="搜索影片..."
-                  value={query}
-                  maxLength={100}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    searchHistory.resetActive();
-                  }}
-                  onFocus={searchHistory.onFocus}
-                  onKeyDown={(e) => searchHistory.onKeyDown(e, pickHistory)}
-                  role="combobox"
-                  aria-expanded={searchHistory.visible}
-                  aria-controls="header-search-history"
-                  aria-autocomplete="list"
-                  aria-activedescendant={
-                    searchHistory.visible && searchHistory.activeIndex >= 0
-                      ? `header-search-history-${searchHistory.activeIndex}`
-                      : undefined
-                  }
-                />
-                {searchHistory.visible && (
-                  <SearchHistoryDropdown
-                    id="header-search-history"
-                    matches={searchHistory.matches}
-                    activeIndex={searchHistory.activeIndex}
-                    onPick={pickHistory}
-                    onRemove={searchHistory.remove}
-                    onClearAll={searchHistory.clearAll}
-                  />
-                )}
-              </div>
-            </form>
-          )}
-
-          <div className="flex-1 sm:hidden" />
-
-          <nav className="flex items-center gap-1 ml-auto">
-            <HeaderLink href="/live" active={pathname === '/live'}>
-              直播
-            </HeaderLink>
-            <HeaderLink href="/about" active={pathname === '/about'}>
-              关于
-            </HeaderLink>
+      <a href="#main-content" className="tv-skip-link">跳到内容</a>
+      <header className="tv-sidebar" aria-label="幕里 导航" onKeyDown={(event) => {
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || window.innerWidth < 768) return;
+        const target = event.target as HTMLElement;
+        if (!target.matches('.tv-sidebar__item, .tv-sidebar__search')) return;
+        if (event.key === 'ArrowRight') {
+          const content = document.querySelector<HTMLElement>('main .tv-premiere__play, main [data-tv-card]');
+          if (content) { event.preventDefault(); content.focus({ preventScroll: true }); content.scrollIntoView({ block: 'nearest' }); }
+        } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('.tv-sidebar__search, .tv-sidebar__item')).filter((element) => element.getClientRects().length > 0);
+          const index = controls.indexOf(target);
+          const next = controls[index + (event.key === 'ArrowDown' ? 1 : -1)];
+          if (next) { event.preventDefault(); next.focus({ preventScroll: true }); }
+        }
+      }}>
+        <Link href="/" className="tv-sidebar__brand" aria-label="幕里 首页">
+          <Image src="/brand/muli-mark-black.png" alt="" width={40} height={40} priority />
+          <span>幕里</span>
+        </Link>
+        <button type="button" className="tv-sidebar__search" onClick={() => setSearchOpen(true)} aria-label="搜索" aria-haspopup="dialog">
+          <Icon name="search" /><span>搜索</span><kbd>⌕</kbd>
+        </button>
+        <nav className="tv-sidebar__navigation" aria-label="主导航">
+          {navigationItems.map(({ page, href, label, icon }) => (
+            <Link key={page} href={href} className={cn('tv-sidebar__item', currentPage === page && 'is-active')} aria-current={currentPage === page ? 'page' : undefined} title={label}>
+              <NavIcon>{icon}</NavIcon><span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="tv-sidebar__library">
+          <p className="tv-sidebar__label">资料库</p>
+          <Link href="/#my-watchlist" className="tv-sidebar__item" title="我的片单"><NavIcon><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-4-6 4Z" /></NavIcon><span>我的片单</span></Link>
+          <button type="button" className="tv-sidebar__item" onClick={() => setHistoryOpen(true)} aria-label="观看历史" aria-haspopup="dialog" title="观看历史"><Icon name="clock" /><span>观看历史</span></button>
+          <button type="button" className="tv-sidebar__item" onClick={requestShowDownloadManager} aria-label="下载管理" title="下载管理"><Icon name="download" /><span>下载管理</span></button>
+        </div>
+        <div className="tv-sidebar__bottom">
+          <div className="tv-sidebar__profile"><span className="tv-sidebar__avatar"><Icon name="play" /></span><div><strong>你的影院</strong><span>好故事，随时继续。</span></div></div>
+          <div className="tv-sidebar__preferences">
+            <button type="button" className="tv-sidebar__item" onClick={() => setSettingsOpen(true)} aria-label="设置" aria-haspopup="dialog" title="设置"><Icon name="gear" /><span>设置</span></button>
             <ThemeToggle />
-            <IconButton label="观看历史" onClick={() => setHistoryOpen(true)}>
-              <Icon name="clock" />
-            </IconButton>
-            <IconButton label="下载管理" onClick={requestShowDownloadManager}>
-              <Icon name="download" />
-            </IconButton>
-            <IconButton label="设置" onClick={() => setSettingsOpen(true)}>
-              <Icon name="gear" />
-            </IconButton>
-          </nav>
+            <Link href="/about" className="tv-sidebar__info" aria-label="关于 幕里" title="关于 幕里"><NavIcon><circle cx="12" cy="12" r="9" /><path d="M12 11v6m0-10h.01" /></NavIcon></Link>
+          </div>
+        </div>
+        <div className="tv-sidebar__mobile-tools">
+          <button type="button" onClick={() => setHistoryOpen(true)} aria-label="观看历史"><Icon name="clock" /></button>
+          <details className="tv-mobile-more">
+            <summary aria-label="更多工具" title="更多工具"><NavIcon><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></NavIcon></summary>
+            <div className="tv-mobile-more__menu">
+              <button type="button" onClick={requestShowDownloadManager}><Icon name="download" />下载管理</button>
+              <div><span>外观</span><ThemeToggle /></div>
+              <Link href="/about"><NavIcon><circle cx="12" cy="12" r="9" /><path d="M12 11v6m0-10h.01" /></NavIcon>关于 幕里</Link>
+            </div>
+          </details>
+          <button type="button" onClick={() => setSettingsOpen(true)} aria-label="设置"><Icon name="gear" /></button>
         </div>
       </header>
-
+      {searchOpen && <SearchDialog onClose={() => setSearchOpen(false)} />}
       <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </>
   );
 }
 
-function HeaderLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+function SearchDialog({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const searchHistory = useSearchHistory(query);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, panelRef);
+  useBodyScrollLock(true);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented && isTopFocusLayer(panelRef.current)) { event.preventDefault(); onClose(); } };
+    panelRef.current?.querySelector('input')?.focus();
+    window.addEventListener('keydown', handler);
+    return () => { window.removeEventListener('keydown', handler); };
+  }, [onClose]);
+  const submit = (text: string) => {
+    const value = text.trim().slice(0, 100);
+    if (!value) return;
+    searchHistory.record(value);
+    router.push(`/?s=${encodeURIComponent(value)}`, { scroll: false });
+    onClose();
+  };
   return (
-    <Link
-      href={href}
-      className={cn(
-        'px-2.5 py-1.5 rounded-md text-sm transition-colors',
-        active ? 'text-content bg-hover' : 'text-muted hover:text-content'
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      className="p-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-    >
-      {children}
-    </button>
+    <div className="tv-search-overlay" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="tv-search-dialog" ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="search-dialog-title" tabIndex={-1}>
+        <div className="tv-search-dialog__heading"><h2 id="search-dialog-title">寻找下一个好故事。</h2><button type="button" onClick={onClose} aria-label="关闭搜索"><Icon name="close" /></button></div>
+        <p>搜索电影、剧集与综艺</p>
+        <div ref={searchHistory.containerRef} className="relative">
+          <form role="search" onSubmit={(event) => { event.preventDefault(); submit(query); }}>
+            <div className="tv-search-field">
+              <Icon name="search" className="tv-search-field__icon" />
+              <input className="min-w-0 flex-1 bg-transparent pr-2 text-content outline-none" aria-label="搜索影片" placeholder="片名、剧集，或你想看的故事" value={query} maxLength={100} onChange={(event) => { setQuery(event.target.value); searchHistory.resetActive(); }} onFocus={searchHistory.onFocus} onKeyDown={(event) => searchHistory.onKeyDown(event, submit)} role="combobox" aria-expanded={searchHistory.visible} aria-controls="header-search-history" aria-autocomplete="list" aria-activedescendant={searchHistory.visible && searchHistory.activeIndex >= 0 ? `header-search-history-${searchHistory.activeIndex}` : undefined} />
+              <button type="submit" className="tv-search-field__submit">搜索</button>
+            </div>
+          </form>
+          {searchHistory.visible && <SearchHistoryDropdown id="header-search-history" matches={searchHistory.matches} activeIndex={searchHistory.activeIndex} onPick={submit} onRemove={searchHistory.remove} onClearAll={searchHistory.clearAll} />}
+        </div>
+        <div className="tv-search-dialog__hint"><Icon name="film" /><span>所有已启用的播放源，一次搜索。</span></div>
+      </div>
+    </div>
   );
 }

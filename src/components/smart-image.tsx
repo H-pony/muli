@@ -13,11 +13,14 @@ interface SmartImageProps {
   loading?: 'lazy' | 'eager';
   /** 候选链耗尽后回调，调用方切换占位图等兜底 UI */
   onExhausted?: () => void;
+  /** 高清背景必须符合实际像素要求，避免镜像返回的小缩略图。 */
+  minimumSize?: { width: number; height: number };
+  onReady?: () => void;
 }
 
 /**
  * 带降级链的封面图组件：direct 模式按 buildImageCandidates 的顺序加载，
- * onError 逐级回退（豆瓣图：直连 → 公共镜像 → 内置代理）；
+ * onError 逐级回退（豆瓣图：直连 → 内置代理 → 公共镜像）；
  * 全部失败后触发 onExhausted 并停止渲染，由调用方展示占位图。
  * referrerPolicy=no-referrer：不向图床暴露来源页，规避部分站点的 Referer 校验。
  */
@@ -29,6 +32,8 @@ export function SmartImage({
   className,
   loading = 'lazy',
   onExhausted,
+  minimumSize,
+  onReady,
 }: SmartImageProps) {
   const candidates = buildImageCandidates(url, mode, customProxy);
   const [idx, setIdx] = useState(0);
@@ -51,6 +56,15 @@ export function SmartImage({
       loading={loading}
       referrerPolicy="no-referrer"
       onError={() => setIdx((i) => i + 1)}
+      onLoad={(event) => {
+        const image = event.currentTarget;
+        if (minimumSize && (image.naturalWidth < minimumSize.width || image.naturalHeight < minimumSize.height
+          || image.naturalWidth / image.naturalHeight < 1.5 || image.naturalWidth / image.naturalHeight > 2.4)) {
+          setIdx((i) => i + 1);
+          return;
+        }
+        onReady?.();
+      }}
     />
   );
 }

@@ -1,8 +1,10 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { SourceConfig } from './types';
+import type { DoubanItem, SourceConfig } from './types';
 // 仅类型引入：store.ts 运行时会引用本模块，反向只取类型不会形成运行时循环
 import type { LiveProbeEntry } from './store';
 import { PERSIST_KEY, flushPendingPersist } from './persist-storage';
+import { CONFIG_NAME, configSettings, isSupportedConfigName, readBrandStorage } from './brand';
+import { migrateLegacyDatabase } from './brand-migration';
 
 /**
  * IndexedDB 持久化（替代旧版 localStorage 数据库）：
@@ -19,13 +21,22 @@ export interface HistoryEntry {
   sourceKey: string;
   sourceUrl?: string;
   vodId: string;
+  /** 直连分享无 CMS 视频 ID，重开时不向详情接口传入 URL。 */
+  directUrl?: string;
   title: string;
   pic?: string;
   episodeIndex: number;
   totalEpisodes: number;
   playbackPosition: number;
   duration: number;
+  completed?: boolean;
   timestamp: number;
+}
+
+export interface WatchlistEntry {
+  id: string;
+  item: DoubanItem;
+  addedAt: number;
 }
 
 export interface ProgressEntry {
@@ -70,13 +81,14 @@ export interface DownloadTaskEntry {
   updatedAt: number;
 }
 
-export const db = new Dexie('libretv') as Dexie & {
+export const db = new Dexie('kongwotv') as Dexie & {
   history: EntityTable<HistoryEntry, 'id'>;
   progress: EntityTable<ProgressEntry, 'key'>;
   searchHistory: EntityTable<SearchHistoryEntry, 'text'>;
   liveProbe: EntityTable<LiveProbeEntry & { url: string }, 'url'>;
   segmentMeta: EntityTable<SegmentMetaEntry, 'key'>;
   downloads: EntityTable<DownloadTaskEntry, 'id'>;
+  watchlist: EntityTable<WatchlistEntry, 'id'>;
 };
 
 db.version(1).stores({
@@ -96,43 +108,73 @@ db.version(3).stores({
   downloads: 'id, createdAt',
 });
 
+db.version(4).stores({
+  watchlist: 'id, addedAt',
+});
+
+db.on('ready', async () => {
+  try { await migrateLegacyDatabase(db); }
+  catch (error) { console.warn('[幕里] 旧设备数据迁移暂未完成，下次打开将重试：', error); }
+});
+
 export const MAX_HISTORY = 100;
 export const MAX_SEARCH_HISTORY = 10;
 
 export async function upsertHistory(entry: Omit<HistoryEntry, 'id'>): Promise<void> {
-  const id = `${entry.sourceKey}_${entry.vodId}`;
-  const existing = await db.history.get(id);
-  const merged: HistoryEntry = {
-    ...existing,
-    ...entry,
-    id,
-    playbackPosition: entry.playbackPosition > 10 ? entry.playbackPosition : existing?.playbackPosition ?? 0,
-    duration: entry.duration || existing?.duration || 0,
-    timestamp: Date.now(),
-  };
-  await db.history.put(merged);
-  // 淘汰最旧记录
-  const count = await db.history.count();
-  if (count > MAX_HISTORY) {
-    const oldest = await db.history.orderBy('timestamp').limit(count - MAX_HISTORY).toArray();
-    await db.history.bulkDelete(oldest.map((o) => o.id));
-  }
+  await db.transaction('rw', db.history, async () => {
+    const id = `${entry.sourceKey}_${entry.vodId}`;
+    const existing = await db.history.get(id);
+    const sameEpisode = existing?.episodeIndex === entry.episodeIndex;
+    const merged: HistoryEntry = {
+      ...existing,
+      ...entry,
+      id,
+      playbackPosition: entry.playbackPosition > 0 ? entry.playbackPosition : sameEpisode ? existing?.playbackPosition ?? 0 : 0,
+      duration: entry.duration || (sameEpisode ? existing?.duration : 0) || 0,
+      completed: entry.completed ?? (sameEpisode ? existing?.completed : false),
+      timestamp: entry.timestamp,
+    };
+    await db.history.put(merged);
+    // 淘汰最旧记录
+    const count = await db.history.count();
+    if (count > MAX_HISTORY) {
+      const oldest = await db.history.orderBy('timestamp').limit(count - MAX_HISTORY).toArray();
+      await db.history.bulkDelete(oldest.map((o) => o.id));
+    }
+  });
 }
 
 export async function updateHistoryProgress(
   sourceKey: string,
   vodId: string,
   position: number,
-  duration: number
+  duration: number,
+  episodeIndex?: number
 ): Promise<void> {
-  const id = `${sourceKey}_${vodId}`;
-  const existing = await db.history.get(id);
-  if (!existing) return;
-  if (Math.abs(existing.playbackPosition - position) < 2 && Math.abs(existing.duration - duration) < 2) return;
-  await db.history.update(id, {
-    playbackPosition: position,
-    duration,
-    timestamp: Date.now(),
+  if (!Number.isFinite(position) || !Number.isFinite(duration) || duration <= 0) return;
+  await db.transaction('rw', db.history, async () => {
+    const id = `${sourceKey}_${vodId}`;
+    const existing = await db.history.get(id);
+    if (!existing || (episodeIndex !== undefined && existing.episodeIndex !== episodeIndex)) return;
+    if (Math.abs(existing.playbackPosition - position) < 2 && Math.abs(existing.duration - duration) < 2) return;
+    await db.history.update(id, {
+      playbackPosition: position,
+      duration,
+      completed: false,
+      timestamp: Date.now(),
+    });
+  });
+}
+
+/** 自然播完同时清除本集续播位置，避免历史卡片再次从片尾打开。 */
+export async function completeEpisode(sourceKey: string, vodId: string, episodeIndex: number): Promise<void> {
+  await db.transaction('rw', db.history, db.progress, async () => {
+    await clearProgress(sourceKey, vodId, episodeIndex);
+    const id = `${sourceKey}_${vodId}`;
+    const existing = await db.history.get(id);
+    if (existing?.episodeIndex === episodeIndex) {
+      await db.history.update(id, { playbackPosition: 0, completed: true, timestamp: Date.now() });
+    }
   });
 }
 
@@ -150,7 +192,7 @@ export function progressKeyOf(sourceKey: string, vodId: string, episodeIndex: nu
 }
 
 export async function saveProgress(sourceKey: string, vodId: string, episodeIndex: number, position: number, duration: number): Promise<void> {
-  if (!duration || position < 1) return;
+  if (!Number.isFinite(duration) || !Number.isFinite(position) || duration <= 0 || position < 1) return;
   await db.progress.put({
     key: progressKeyOf(sourceKey, vodId, episodeIndex),
     position,
@@ -206,13 +248,13 @@ export async function clearLiveProbeResultsDb(): Promise<void> {
   await db.liveProbe.clear();
 }
 
-// —— 配置导入导出（兼容旧版 LibreTV-Settings JSON 结构的导出格式） ——
+// —— 配置导入导出（兼容更名前的旧版 JSON 结构） ——
 
 export async function exportConfig(): Promise<string> {
   // 导出前 flush：把节流缓冲中的最新设置落盘，避免导出的是 800ms 前的旧快照
   flushPendingPersist();
   const history = await db.history.toArray();
-  const settings = localStorage.getItem(PERSIST_KEY);
+  const settings = readBrandStorage(PERSIST_KEY);
 
   const data: Record<string, unknown> = {
     viewingHistory: JSON.stringify(history),
@@ -220,7 +262,7 @@ export async function exportConfig(): Promise<string> {
   if (settings) data[PERSIST_KEY] = settings;
 
   return JSON.stringify({
-    name: 'LibreTV-Settings',
+    name: CONFIG_NAME,
     time: Date.now().toString(),
     cfgVer: '2.0.0',
     data,
@@ -232,33 +274,38 @@ export async function importConfig(content: string): Promise<void> {
     name?: string;
     data?: Record<string, string>;
   };
-  if (config.name !== 'LibreTV-Settings') throw new Error('配置文件格式不正确');
+  if (!isSupportedConfigName(config.name)) throw new Error('配置文件格式不正确');
   const data = config.data || {};
 
-  if (typeof data[PERSIST_KEY] === 'string') {
+  const settings = configSettings(data);
+  if (settings !== undefined) {
     // 关键：先 flush 节流缓冲中的旧状态再写导入配置，否则缓冲会在
     // 之后 flush 时用导入前的旧状态覆盖刚写入的配置（导入静默丢失）
     flushPendingPersist();
-    localStorage.setItem(PERSIST_KEY, data[PERSIST_KEY]);
+    localStorage.setItem(PERSIST_KEY, settings);
   }
 
   if (typeof data['viewingHistory'] === 'string') {
     // 兼容旧版历史结构（含全集 URL 列表），只迁移定位信息
     const legacy = JSON.parse(data['viewingHistory']) as Record<string, unknown>[];
     for (const item of legacy.slice(0, MAX_HISTORY)) {
-      const sourceKey = String(item.sourceCode || item.sourceName || '');
-      const vodId = String(item.vod_id || '');
+      const sourceKey = String(item.sourceKey || item.sourceCode || item.sourceName || '');
+      const vodId = String(item.vodId || item.vod_id || '');
       const title = String(item.title || '未知视频');
       if (!sourceKey || !vodId) continue;
-      const totalEpisodes = Array.isArray(item.episodes) ? item.episodes.length : 0;
+      const totalEpisodes = typeof item.totalEpisodes === 'number' ? item.totalEpisodes : Array.isArray(item.episodes) ? item.episodes.length : 0;
       await upsertHistory({
         sourceKey,
+        sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : undefined,
+        pic: typeof item.pic === 'string' ? item.pic : undefined,
         vodId,
+        directUrl: typeof item.directUrl === 'string' ? item.directUrl : /^https?:\/\//.test(vodId) && totalEpisodes === 0 ? vodId : undefined,
         title,
         episodeIndex: typeof item.episodeIndex === 'number' ? item.episodeIndex : 0,
         totalEpisodes,
         playbackPosition: typeof item.playbackPosition === 'number' ? item.playbackPosition : 0,
         duration: typeof item.duration === 'number' ? item.duration : 0,
+        completed: item.completed === true,
         timestamp: typeof item.timestamp === 'number' ? item.timestamp : Date.now(),
       });
     }

@@ -85,7 +85,7 @@ export async function pickSaveTarget(filename: string, estimatedBytes?: number):
           }) => Promise<{ createWritable: () => Promise<WritableStream> }>;
         }
       ).showSaveFilePicker;
-      const handle = await picker({ suggestedName: filename });
+      const handle = await picker.call(window, { suggestedName: filename });
       const writable = await handle.createWritable();
       const writer = writable.getWriter();
       return {

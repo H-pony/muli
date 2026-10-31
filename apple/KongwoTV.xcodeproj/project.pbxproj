@@ -1,0 +1,474 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		033F6CB79D627DF1D546589A /* Sources/BackdropArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C9DF836A0F16F1011EF549 /* Sources/BackdropArtwork.swift */; };
+		07FDB8D04A86B970DD36385C /* Sources/Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511A2B12464B2FFEDBF96844 /* Sources/Platform.swift */; };
+		10424A814B04EC1B0D3A35AC /* Sources/BackdropImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6CB5270BEB25ABF7DAB52D3 /* Sources/BackdropImageDecoder.swift */; };
+		112A47197B6ED0B41A991D24 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 28DCF63E1EB5F53BA96138B3 /* Resources/Assets.xcassets */; };
+		12176A130D2ED3AAF4B028D5 /* Resources/PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5F2C0BAFF5ECE16FF3ADD729 /* Resources/PrivacyInfo.xcprivacy */; };
+		1C8B6B6BC22304BDD46D4CAF /* Sources/KongwoTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A008F5F80D020F4CDA6D11 /* Sources/KongwoTVApp.swift */; };
+		1D1CDB8EF0AD2AACE38B326D /* Resources/Assets-tvOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 41D688B1E861BFE8B02405B9 /* Resources/Assets-tvOS.xcassets */; };
+		1F7C9CB7D8B6D38581A638AB /* Sources/MediaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EDD3954A04C1E90F570134 /* Sources/MediaRepository.swift */; };
+		211197BC3AE6E06C9E3542D9 /* Sources/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C76F6C39223CBC4330AF2D /* Sources/Models.swift */; };
+		297EF79C5BE1CF1A1D1D234B /* Sources/ArtworkDebugPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB3F74A83BF8C209708BBB9 /* Sources/ArtworkDebugPreview.swift */; };
+		29FEAA53F03EE7851516AACF /* Sources/ArtworkViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B618EBB66518ADFFF7DCA58F /* Sources/ArtworkViews.swift */; };
+		2F12CCC804352F0F8E7180AC /* Resources/PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5F2C0BAFF5ECE16FF3ADD729 /* Resources/PrivacyInfo.xcprivacy */; };
+		2FA230F83D623A22D978BFCE /* ../shared/artwork-catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = 0BFBB88DF6F56B1C5F26DC15 /* ../shared/artwork-catalog.json */; };
+		364571DB29C3483F71C88FCB /* Sources/MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CE5478BA03083EA4B60FA1 /* Sources/MobilePlayer.swift */; };
+		4BF4AE2A1A653D5F741FE8B8 /* ../shared/tmdb-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 8649FBAC15DF5024CCB38D56 /* ../shared/tmdb-logo.png */; };
+		530229B94098C547CD0B0334 /* Sources/MediaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EDD3954A04C1E90F570134 /* Sources/MediaRepository.swift */; };
+		5461408D45CD0AADC735425E /* Sources/MobilePlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AF8D6E654A38EFA8FB9639B /* Sources/MobilePlatform.swift */; };
+		5681795E922ADB857689263F /* Sources/BackdropRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B395977E436FEEC0F10AB28 /* Sources/BackdropRepository.swift */; };
+		56BD2A3D7F46695A2C8EE8A2 /* Resources/Assets-iOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CBF3208306770313C384C105 /* Resources/Assets-iOS.xcassets */; };
+		5760DDE930AE630362A65A7D /* Sources/BackdropImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6CB5270BEB25ABF7DAB52D3 /* Sources/BackdropImageDecoder.swift */; };
+		6282C3BD22F8A9CC838C7967 /* Sources/MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CE5478BA03083EA4B60FA1 /* Sources/MobilePlayer.swift */; };
+		62B978616686A1CBD9198004 /* Sources/TMDBCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 450F30007DAAB1F74AAC3CD2 /* Sources/TMDBCredentialStore.swift */; };
+		6573EC78CCA395818DA05704 /* Sources/TMDBCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 450F30007DAAB1F74AAC3CD2 /* Sources/TMDBCredentialStore.swift */; };
+		679D5DBC9299C460AD5D8036 /* Sources/Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061DF8325542CBF1D5EF6B3D /* Sources/Player.swift */; };
+		6906028A03263D9BEA8636BF /* Sources/TVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1513B97AFA716EB4DACF2080 /* Sources/TVPlayer.swift */; };
+		6A6701A9283620CD2049FA11 /* Sources/TVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1513B97AFA716EB4DACF2080 /* Sources/TVPlayer.swift */; };
+		6C1FDE74A04A13BFA4EDAB27 /* Sources/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C76F6C39223CBC4330AF2D /* Sources/Models.swift */; };
+		78DFDFAEA03014877E7EB512 /* Sources/Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F4FB301B942F0C873DA6862 /* Sources/Views.swift */; };
+		7AC1B03BD4185451ABF96922 /* Resources/LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = B3E83F19620DD171DFA30AA9 /* Resources/LICENSE.txt */; };
+		7B843C5445E6ACB3B983F25D /* Sources/Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511A2B12464B2FFEDBF96844 /* Sources/Platform.swift */; };
+		87E0957E130E7EC71061F3A5 /* Resources/channels.m3u in Resources */ = {isa = PBXBuildFile; fileRef = 98CB746BEF622E281DD90F62 /* Resources/channels.m3u */; };
+		961F8A77EC46C74861A890BC /* Resources/LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = B3E83F19620DD171DFA30AA9 /* Resources/LICENSE.txt */; };
+		983C68FC527128384F99F8E9 /* Sources/MobilePlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AF8D6E654A38EFA8FB9639B /* Sources/MobilePlatform.swift */; };
+		9C0FACCC4F85FE76A32ECD0D /* Sources/BackdropRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B395977E436FEEC0F10AB28 /* Sources/BackdropRepository.swift */; };
+		9CD4341385B45F0DB395258F /* Sources/Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061DF8325542CBF1D5EF6B3D /* Sources/Player.swift */; };
+		9E45D341779ED8CF31A03315 /* ../shared/tmdb-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 8649FBAC15DF5024CCB38D56 /* ../shared/tmdb-logo.png */; };
+		A2626FEE2138150920735AA7 /* Sources/Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F4FB301B942F0C873DA6862 /* Sources/Views.swift */; };
+		A460CDE2FB9C11999B5BE6EE /* Resources/channels.m3u in Resources */ = {isa = PBXBuildFile; fileRef = 98CB746BEF622E281DD90F62 /* Resources/channels.m3u */; };
+		A61D9461B13AD89F26A3FEEE /* Resources/NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = E24D18BFAE028AD1D56B66E4 /* Resources/NOTICE.txt */; };
+		A77EB92879AF7E9253FEEAF9 /* Resources/NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = E24D18BFAE028AD1D56B66E4 /* Resources/NOTICE.txt */; };
+		A89EBBF556BFFFFA3D4896E7 /* Sources/ArtworkDebugPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB3F74A83BF8C209708BBB9 /* Sources/ArtworkDebugPreview.swift */; };
+		B2D0D525EC18194CE1AFBCC2 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 28DCF63E1EB5F53BA96138B3 /* Resources/Assets.xcassets */; };
+		B32A6FEDD5207351D166EB12 /* Sources/KongwoTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A008F5F80D020F4CDA6D11 /* Sources/KongwoTVApp.swift */; };
+		BF2D5903D66ECCF6FF9F9CE1 /* Resources/sources.json in Resources */ = {isa = PBXBuildFile; fileRef = BCD1D80563DF056A73DB148A /* Resources/sources.json */; };
+		C0E6C813F11FADD30712B74B /* Sources/BackdropArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C9DF836A0F16F1011EF549 /* Sources/BackdropArtwork.swift */; };
+		C5DD961BF4A9644F15FBDE3C /* Resources/sources.json in Resources */ = {isa = PBXBuildFile; fileRef = BCD1D80563DF056A73DB148A /* Resources/sources.json */; };
+		DB01ADA32DB7BFD90FA4B78E /* ../shared/artwork-catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = 0BFBB88DF6F56B1C5F26DC15 /* ../shared/artwork-catalog.json */; };
+		ECE8FFBC2E1E2F5FF852894D /* Sources/ArtworkViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B618EBB66518ADFFF7DCA58F /* Sources/ArtworkViews.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		061DF8325542CBF1D5EF6B3D /* Sources/Player.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Player.swift; sourceTree = "<group>"; };
+		0BFBB88DF6F56B1C5F26DC15 /* ../shared/artwork-catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "../shared/artwork-catalog.json"; sourceTree = "<group>"; };
+		1513B97AFA716EB4DACF2080 /* Sources/TVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/TVPlayer.swift; sourceTree = "<group>"; };
+		1D318A75A1B0F62F9443728C /* 幕里.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "幕里.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		28DCF63E1EB5F53BA96138B3 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
+		3B395977E436FEEC0F10AB28 /* Sources/BackdropRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/BackdropRepository.swift; sourceTree = "<group>"; };
+		41A008F5F80D020F4CDA6D11 /* Sources/KongwoTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/KongwoTVApp.swift; sourceTree = "<group>"; };
+		41D688B1E861BFE8B02405B9 /* Resources/Assets-tvOS.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Resources/Assets-tvOS.xcassets"; sourceTree = "<group>"; };
+		450F30007DAAB1F74AAC3CD2 /* Sources/TMDBCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/TMDBCredentialStore.swift; sourceTree = "<group>"; };
+		511A2B12464B2FFEDBF96844 /* Sources/Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Platform.swift; sourceTree = "<group>"; };
+		5F2C0BAFF5ECE16FF3ADD729 /* Resources/PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		5FB3F74A83BF8C209708BBB9 /* Sources/ArtworkDebugPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArtworkDebugPreview.swift; sourceTree = "<group>"; };
+		75C9DF836A0F16F1011EF549 /* Sources/BackdropArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/BackdropArtwork.swift; sourceTree = "<group>"; };
+		7AF8D6E654A38EFA8FB9639B /* Sources/MobilePlatform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/MobilePlatform.swift; sourceTree = "<group>"; };
+		84EDD3954A04C1E90F570134 /* Sources/MediaRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/MediaRepository.swift; sourceTree = "<group>"; };
+		8649FBAC15DF5024CCB38D56 /* ../shared/tmdb-logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "../shared/tmdb-logo.png"; sourceTree = "<group>"; };
+		96C76F6C39223CBC4330AF2D /* Sources/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models.swift; sourceTree = "<group>"; };
+		98CB746BEF622E281DD90F62 /* Resources/channels.m3u */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/channels.m3u; sourceTree = "<group>"; };
+		9F4FB301B942F0C873DA6862 /* Sources/Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views.swift; sourceTree = "<group>"; };
+		B3E83F19620DD171DFA30AA9 /* Resources/LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/LICENSE.txt; sourceTree = "<group>"; };
+		B618EBB66518ADFFF7DCA58F /* Sources/ArtworkViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArtworkViews.swift; sourceTree = "<group>"; };
+		BCD1D80563DF056A73DB148A /* Resources/sources.json */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/sources.json; sourceTree = "<group>"; };
+		C4CE5478BA03083EA4B60FA1 /* Sources/MobilePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/MobilePlayer.swift; sourceTree = "<group>"; };
+		C6CB5270BEB25ABF7DAB52D3 /* Sources/BackdropImageDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/BackdropImageDecoder.swift; sourceTree = "<group>"; };
+		CBF3208306770313C384C105 /* Resources/Assets-iOS.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Resources/Assets-iOS.xcassets"; sourceTree = "<group>"; };
+		D1854E3B0995175DEC90BC5B /* 幕里.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "幕里.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E24D18BFAE028AD1D56B66E4 /* Resources/NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/NOTICE.txt; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4AD07191419C57F760504179 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE3D981F476A6D981628F8DB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A3E27B8CA818264D75C8D81 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1D318A75A1B0F62F9443728C /* 幕里.app */,
+				D1854E3B0995175DEC90BC5B /* 幕里.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0D6E4079E36703EBD37C0072 = {
+			isa = PBXGroup;
+			children = (
+				5FB3F74A83BF8C209708BBB9 /* Sources/ArtworkDebugPreview.swift */,
+				B618EBB66518ADFFF7DCA58F /* Sources/ArtworkViews.swift */,
+				75C9DF836A0F16F1011EF549 /* Sources/BackdropArtwork.swift */,
+				C6CB5270BEB25ABF7DAB52D3 /* Sources/BackdropImageDecoder.swift */,
+				3B395977E436FEEC0F10AB28 /* Sources/BackdropRepository.swift */,
+				41A008F5F80D020F4CDA6D11 /* Sources/KongwoTVApp.swift */,
+				84EDD3954A04C1E90F570134 /* Sources/MediaRepository.swift */,
+				7AF8D6E654A38EFA8FB9639B /* Sources/MobilePlatform.swift */,
+				C4CE5478BA03083EA4B60FA1 /* Sources/MobilePlayer.swift */,
+				96C76F6C39223CBC4330AF2D /* Sources/Models.swift */,
+				511A2B12464B2FFEDBF96844 /* Sources/Platform.swift */,
+				061DF8325542CBF1D5EF6B3D /* Sources/Player.swift */,
+				450F30007DAAB1F74AAC3CD2 /* Sources/TMDBCredentialStore.swift */,
+				1513B97AFA716EB4DACF2080 /* Sources/TVPlayer.swift */,
+				9F4FB301B942F0C873DA6862 /* Sources/Views.swift */,
+				BCD1D80563DF056A73DB148A /* Resources/sources.json */,
+				98CB746BEF622E281DD90F62 /* Resources/channels.m3u */,
+				B3E83F19620DD171DFA30AA9 /* Resources/LICENSE.txt */,
+				E24D18BFAE028AD1D56B66E4 /* Resources/NOTICE.txt */,
+				5F2C0BAFF5ECE16FF3ADD729 /* Resources/PrivacyInfo.xcprivacy */,
+				28DCF63E1EB5F53BA96138B3 /* Resources/Assets.xcassets */,
+				0BFBB88DF6F56B1C5F26DC15 /* ../shared/artwork-catalog.json */,
+				8649FBAC15DF5024CCB38D56 /* ../shared/tmdb-logo.png */,
+				0A3E27B8CA818264D75C8D81 /* Products */,
+				CBF3208306770313C384C105 /* Resources/Assets-iOS.xcassets */,
+				41D688B1E861BFE8B02405B9 /* Resources/Assets-tvOS.xcassets */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A053468C2CFABC24BE037B05 /* KongwoTV-tvOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8C9D31F9CF7F24580C30D3B2 /* Build configuration list for PBXNativeTarget "KongwoTV-tvOS" */;
+			buildPhases = (
+				81B20F53EE304F58E5BA618E /* Sources */,
+				4AD07191419C57F760504179 /* Frameworks */,
+				BF57E7F42B2F85CF0766A9AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "KongwoTV-tvOS";
+			productName = "幕里";
+			productReference = D1854E3B0995175DEC90BC5B /* 幕里.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C5FB640497BD0AA22C754F21 /* KongwoTV-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F83D165BF58F5DF66B3C0838 /* Build configuration list for PBXNativeTarget "KongwoTV-iOS" */;
+			buildPhases = (
+				306F2A7C892D39CFDF24F5BB /* Sources */,
+				DE3D981F476A6D981628F8DB /* Frameworks */,
+				5149AE55A5A5CEAA4D58F505 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "KongwoTV-iOS";
+			productName = "幕里";
+			productReference = 1D318A75A1B0F62F9443728C /* 幕里.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		244210E48437B6556980A702 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = 7ED5184A5487DF185E3420D0 /* Build configuration list for PBXProject "KongwoTV" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = zh_CN;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				zh_CN,
+				en,
+				Base,
+			);
+			mainGroup = 0D6E4079E36703EBD37C0072;
+			productRefGroup = 0A3E27B8CA818264D75C8D81 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C5FB640497BD0AA22C754F21 /* KongwoTV-iOS */,
+				A053468C2CFABC24BE037B05 /* KongwoTV-tvOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5149AE55A5A5CEAA4D58F505 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5DD961BF4A9644F15FBDE3C /* Resources/sources.json in Resources */,
+				A460CDE2FB9C11999B5BE6EE /* Resources/channels.m3u in Resources */,
+				7AC1B03BD4185451ABF96922 /* Resources/LICENSE.txt in Resources */,
+				A61D9461B13AD89F26A3FEEE /* Resources/NOTICE.txt in Resources */,
+				2F12CCC804352F0F8E7180AC /* Resources/PrivacyInfo.xcprivacy in Resources */,
+				112A47197B6ED0B41A991D24 /* Resources/Assets.xcassets in Resources */,
+				DB01ADA32DB7BFD90FA4B78E /* ../shared/artwork-catalog.json in Resources */,
+				9E45D341779ED8CF31A03315 /* ../shared/tmdb-logo.png in Resources */,
+				56BD2A3D7F46695A2C8EE8A2 /* Resources/Assets-iOS.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF57E7F42B2F85CF0766A9AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF2D5903D66ECCF6FF9F9CE1 /* Resources/sources.json in Resources */,
+				87E0957E130E7EC71061F3A5 /* Resources/channels.m3u in Resources */,
+				961F8A77EC46C74861A890BC /* Resources/LICENSE.txt in Resources */,
+				A77EB92879AF7E9253FEEAF9 /* Resources/NOTICE.txt in Resources */,
+				12176A130D2ED3AAF4B028D5 /* Resources/PrivacyInfo.xcprivacy in Resources */,
+				B2D0D525EC18194CE1AFBCC2 /* Resources/Assets.xcassets in Resources */,
+				2FA230F83D623A22D978BFCE /* ../shared/artwork-catalog.json in Resources */,
+				4BF4AE2A1A653D5F741FE8B8 /* ../shared/tmdb-logo.png in Resources */,
+				1D1CDB8EF0AD2AACE38B326D /* Resources/Assets-tvOS.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		306F2A7C892D39CFDF24F5BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				297EF79C5BE1CF1A1D1D234B /* Sources/ArtworkDebugPreview.swift in Sources */,
+				29FEAA53F03EE7851516AACF /* Sources/ArtworkViews.swift in Sources */,
+				033F6CB79D627DF1D546589A /* Sources/BackdropArtwork.swift in Sources */,
+				5760DDE930AE630362A65A7D /* Sources/BackdropImageDecoder.swift in Sources */,
+				9C0FACCC4F85FE76A32ECD0D /* Sources/BackdropRepository.swift in Sources */,
+				1C8B6B6BC22304BDD46D4CAF /* Sources/KongwoTVApp.swift in Sources */,
+				1F7C9CB7D8B6D38581A638AB /* Sources/MediaRepository.swift in Sources */,
+				983C68FC527128384F99F8E9 /* Sources/MobilePlatform.swift in Sources */,
+				364571DB29C3483F71C88FCB /* Sources/MobilePlayer.swift in Sources */,
+				211197BC3AE6E06C9E3542D9 /* Sources/Models.swift in Sources */,
+				07FDB8D04A86B970DD36385C /* Sources/Platform.swift in Sources */,
+				679D5DBC9299C460AD5D8036 /* Sources/Player.swift in Sources */,
+				6573EC78CCA395818DA05704 /* Sources/TMDBCredentialStore.swift in Sources */,
+				6A6701A9283620CD2049FA11 /* Sources/TVPlayer.swift in Sources */,
+				A2626FEE2138150920735AA7 /* Sources/Views.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		81B20F53EE304F58E5BA618E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A89EBBF556BFFFFA3D4896E7 /* Sources/ArtworkDebugPreview.swift in Sources */,
+				ECE8FFBC2E1E2F5FF852894D /* Sources/ArtworkViews.swift in Sources */,
+				C0E6C813F11FADD30712B74B /* Sources/BackdropArtwork.swift in Sources */,
+				10424A814B04EC1B0D3A35AC /* Sources/BackdropImageDecoder.swift in Sources */,
+				5681795E922ADB857689263F /* Sources/BackdropRepository.swift in Sources */,
+				B32A6FEDD5207351D166EB12 /* Sources/KongwoTVApp.swift in Sources */,
+				530229B94098C547CD0B0334 /* Sources/MediaRepository.swift in Sources */,
+				5461408D45CD0AADC735425E /* Sources/MobilePlatform.swift in Sources */,
+				6282C3BD22F8A9CC838C7967 /* Sources/MobilePlayer.swift in Sources */,
+				6C1FDE74A04A13BFA4EDAB27 /* Sources/Models.swift in Sources */,
+				7B843C5445E6ACB3B983F25D /* Sources/Platform.swift in Sources */,
+				9CD4341385B45F0DB395258F /* Sources/Player.swift in Sources */,
+				62B978616686A1CBD9198004 /* Sources/TMDBCredentialStore.swift in Sources */,
+				6906028A03263D9BEA8636BF /* Sources/TVPlayer.swift in Sources */,
+				78DFDFAEA03014877E7EB512 /* Sources/Views.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1B2B659CFB7558968E5D0D7F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2161207;
+				DEVELOPMENT_TEAM = 6L993A72J9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/iOS-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.16.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.kongwotv.ios;
+				PRODUCT_NAME = "幕里";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2FAB7A3C5A5F21B363FAB39E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2161207;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/tvOS-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.16.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.kongwotv.appletv;
+				PRODUCT_NAME = "幕里";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		35B1014F135DE9B45529B733 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4554615FC7FFB7835E46779F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2161207;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/tvOS-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.16.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.kongwotv.appletv;
+				PRODUCT_NAME = "幕里";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		488864B3D19480A82F7F1786 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C832FAADC53B6E6813CAC96F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2161207;
+				DEVELOPMENT_TEAM = 6L993A72J9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/iOS-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.16.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.kongwotv.ios;
+				PRODUCT_NAME = "幕里";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7ED5184A5487DF185E3420D0 /* Build configuration list for PBXProject "KongwoTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				488864B3D19480A82F7F1786 /* Debug */,
+				35B1014F135DE9B45529B733 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8C9D31F9CF7F24580C30D3B2 /* Build configuration list for PBXNativeTarget "KongwoTV-tvOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4554615FC7FFB7835E46779F /* Debug */,
+				2FAB7A3C5A5F21B363FAB39E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F83D165BF58F5DF66B3C0838 /* Build configuration list for PBXNativeTarget "KongwoTV-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B2B659CFB7558968E5D0D7F /* Debug */,
+				C832FAADC53B6E6813CAC96F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 244210E48437B6556980A702 /* Project object */;
+}

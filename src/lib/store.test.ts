@@ -390,3 +390,105 @@ describe('订阅整体开关', () => {
     expect(isInDisabledSubscription(store(), 'manual_0')).toBe(false);
   });
 });
+
+describe('直播频道收藏与线路切换后的观看记录', () => {
+  const primary = 'https://primary.example.com/cctv1.m3u8';
+  const backup = 'https://backup.example.com/cctv1.m3u8';
+  const channelKey = 'live:cctv1';
+
+  beforeEach(() => {
+    useAppStore.setState({ liveEnvSources: [], liveEnvKeysSeen: [] });
+  });
+
+  it('取消旧 URL 收藏时清理同频道所有已知线路别名，重新收藏只保存频道身份', () => {
+    const unrelated = 'https://other.example.com/news.m3u8';
+    useAppStore.setState({ liveFavorites: [primary, backup, unrelated, 'live:cctv5+'] });
+    store().toggleLiveFavorite(channelKey, [primary, backup]);
+    expect(store().liveFavorites).toEqual([unrelated, 'live:cctv5+']);
+
+    store().toggleLiveFavorite(channelKey, [primary, backup]);
+    expect(store().liveFavorites).toEqual([unrelated, 'live:cctv5+', channelKey]);
+    store().toggleLiveFavorite(channelKey, [backup, primary]);
+    expect(store().liveFavorites).toEqual([unrelated, 'live:cctv5+']);
+  });
+
+  it('来源订阅和流地址更新后保留稳定频道收藏', () => {
+    store().setLiveEnvSources([{ key: 'primary', name: '主源', url: 'https://old.example.com/list.m3u' }]);
+    store().toggleLiveFavorite(channelKey, [primary]);
+    store().addLiveRecent({ channelKey, name: 'CCTV1', url: primary, sourceUrl: 'https://old.example.com/list.m3u' });
+
+    store().setLiveEnvSources([{ key: 'primary', name: '主源', url: 'https://new.example.com/list.m3u' }]);
+    store().addLiveRecent({ channelKey, name: 'CCTV-1综合', url: backup, sourceUrl: 'https://new.example.com/list.m3u' });
+    expect(store().liveFavorites).toEqual([channelKey]);
+    expect(store().liveRecent).toHaveLength(1);
+    expect(store().liveRecent[0]).toMatchObject({ url: backup, sourceUrl: 'https://new.example.com/list.m3u' });
+  });
+
+  it('同频道换线更新最近记录与当前来源，不继承上次线路的 EPG/tvg-id', () => {
+    store().addLiveRecent({
+      channelKey, name: 'CCTV1', url: primary, tvgId: 'primary-id',
+      epg: 'https://primary.example.com/guide.xml', sourceUrl: 'https://primary.example.com/list.m3u',
+    });
+    store().addLiveRecent({
+      name: '湖南卫视', url: 'https://other.example.com/hunan.m3u8',
+    });
+    store().addLiveRecent({
+      channelKey, name: 'CCTV-1综合', url: backup, sourceUrl: 'https://backup.example.com/list.m3u',
+    });
+    expect(store().liveRecent).toHaveLength(2);
+    expect(store().liveRecent[0]).toMatchObject({ channelKey, url: backup, sourceUrl: 'https://backup.example.com/list.m3u' });
+    expect(store().liveRecent[0].epg).toBeUndefined();
+    expect(store().liveRecent[0].tvgId).toBeUndefined();
+    expect(store().liveRecent[1].name).toBe('湖南卫视');
+  });
+
+  it('新增观看记录会合并多个旧版 URL 记录中的央视台名别名', () => {
+    useAppStore.setState({ liveRecent: [
+      { name: 'CCTV1', url: primary, timestamp: 1 },
+      { name: 'CCTV-1综合', url: 'https://expired.example.com/cctv1.m3u8', timestamp: 2 },
+      { name: '湖南卫视', url: 'https://other.example.com/hunan.m3u8', timestamp: 3 },
+    ] });
+    store().addLiveRecent({ name: 'CCTV-1 综合 高清', url: backup });
+    expect(store().liveRecent).toHaveLength(2);
+    expect(store().liveRecent[0]).toMatchObject({ channelKey, url: backup });
+    expect(store().liveRecent[1].name).toBe('湖南卫视');
+  });
+
+  it('相同数字 tvg-id 的 CCTV5 与 CCTV5+ 分别保留观看记录', () => {
+    store().addLiveRecent({ name: 'CCTV5', url: 'https://streams.example.com/cctv5.m3u8', tvgId: '26' });
+    store().addLiveRecent({ name: 'CCTV5+', url: 'https://streams.example.com/cctv5plus.m3u8', tvgId: '26' });
+    expect(store().liveRecent).toHaveLength(2);
+    expect(store().liveRecent[0].channelKey).not.toBe(store().liveRecent[1].channelKey);
+    expect(store().liveRecent.map((recent) => recent.name)).toEqual(['CCTV5+', 'CCTV5']);
+  });
+
+  it('换线后按频道身份删除最近观看，不会误删其他体育频道', () => {
+    store().addLiveRecent({ name: 'CCTV5', url: 'https://streams.example.com/cctv5.m3u8' });
+    store().addLiveRecent({ name: 'CCTV5+', url: 'https://streams.example.com/cctv5plus.m3u8' });
+    store().addLiveRecent({ name: 'CCTV1', url: primary });
+    store().addLiveRecent({ name: 'CCTV-1综合', url: backup });
+    store().removeLiveRecent(store().liveRecent[0].channelKey!);
+    expect(store().liveRecent.map((recent) => recent.name)).toEqual(['CCTV5+', 'CCTV5']);
+  });
+
+  it('仍支持按旧流 URL 删除无频道身份的历史记录', () => {
+    useAppStore.setState({ liveRecent: [
+      { name: '旧央视记录', url: primary, timestamp: 1 },
+      { name: '其他频道', url: backup, timestamp: 2 },
+    ] });
+    store().removeLiveRecent(primary);
+    expect(store().liveRecent).toEqual([{ name: '其他频道', url: backup, timestamp: 2 }]);
+  });
+
+  it('20 条记录中切换最早频道的线路时只移动该频道，不挤掉其他频道', () => {
+    const previous = Array.from({ length: 20 }, (_, index) => ({
+      channelKey: `live:test${index}`, name: `频道${index}`,
+      url: `https://streams.example.com/${index}.m3u8`, timestamp: 20 - index,
+    }));
+    useAppStore.setState({ liveRecent: previous });
+    store().addLiveRecent({ channelKey: 'live:test19', name: '频道19', url: 'https://backup.example.com/19.m3u8' });
+    expect(store().liveRecent).toHaveLength(20);
+    expect(store().liveRecent[0]).toMatchObject({ channelKey: 'live:test19', url: 'https://backup.example.com/19.m3u8' });
+    expect(new Set(store().liveRecent.map((recent) => recent.channelKey))).toEqual(new Set(previous.map((recent) => recent.channelKey)));
+  });
+});

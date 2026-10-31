@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-23",
+  "scope": "Android mobile/tablet and independent Android TV",
+  "runtimeValidated": false,
+  "installed": false,
+  "published": false,
+  "variants": {
+    "tvDebug": {
+      "unitTests": {
+        "tests": 72,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "lint": {
+        "Warning": 24
+      },
+      "apk": "/Users/kongwo/Documents/项目/LibreTV/android-tv/app/build/outputs/apk/tv/debug/app-tv-debug.apk",
+      "bytes": 7224067,
+      "sha256": "b46289d0c551d15bed64da198fcaa323331be7734b51e7f165e4f34e24099c3d"
+    },
+    "mobileDebug": {
+      "unitTests": {
+        "tests": 72,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "lint": {
+        "Warning": 24
+      },
+      "apk": "/Users/kongwo/Documents/项目/LibreTV/android-tv/app/build/outputs/apk/mobile/debug/app-mobile-debug.apk",
+      "bytes": 7215615,
+      "sha256": "c9b75c46e62e5961149ded93a2db8aa426df63c7424a5f19edd30d8894e105c9"
+    }
+  }
+}

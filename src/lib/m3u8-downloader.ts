@@ -4,7 +4,7 @@ import { StreamingTransmuxer } from './mp4-transmuxer';
 /**
  * 整集离线下载：
  * - 分片并发下载（默认 8），单分片 3 次重试，已下载分片写入 Cache Storage
- *   （`libretv-dl-v1` 桶）实现网络层断点——中断后续传不再耗流量；
+ *   （`kongwotv-dl-v1` 桶）实现网络层断点——中断后续传不再耗流量；
  * - AES-128 解密用 WebCrypto AES-CBC（HLS 标准），不引入 CryptoJS；
  * - 输出：TS 直接顺序拼接；MP4 经 mux.js 流式转封装（边下边写，不聚整集）；
  * - 保存目标（FS Access / 内存）由调用方在用户手势内选好传入，本模块只管写。
@@ -14,7 +14,7 @@ import { StreamingTransmuxer } from './mp4-transmuxer';
  * 但需要用户重新选择保存位置。
  */
 
-const DL_CACHE_NAME = 'libretv-dl-v1';
+const DL_CACHE_NAME = 'kongwotv-dl-v1';
 const SEGMENT_TIMEOUT_MS = 20_000;
 const MAX_SEGMENT_RETRIES = 3;
 
@@ -56,11 +56,11 @@ export interface DownloadProgress {
 
 /**
  * 分片缓存 key。Cache Storage 的 put/match 只接受 http(s) scheme——
- * 自定义字符串（如 `libretv-dl-v1:dl:...`）会被 URL 解析成同名自定义协议，
+ * 自定义字符串（如 `kongwotv-dl-v1:dl:...`）会被 URL 解析成同名自定义协议，
  * put 直接抛 "Request scheme ... is unsupported"。因此用一段不会被真实
  * 请求的保留域名构造合法 URL，仅作缓存 key 使用；taskId 经编码避免歧义。
  */
-const DL_CHUNK_ORIGIN = 'https://dl.libretv.local';
+const DL_CHUNK_ORIGIN = 'https://dl.kongwotv.local';
 
 function dlChunkKey(taskId: string, index: number): string {
   return `${DL_CHUNK_ORIGIN}/${encodeURIComponent(taskId)}/${index}`;
@@ -132,6 +132,24 @@ export interface DownloadJobOptions {
  * 更新 Dexie 任务状态；本函数只负责解析 → 并发下载 → 顺序写出。
  */
 export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
+  const abort = new AbortController();
+  const signal = AbortSignal.any([opts.signal, abort.signal]);
+  const wakePaused = () => opts.pause.destroy();
+  signal.addEventListener('abort', wakePaused, { once: true });
+  try {
+    signal.throwIfAborted();
+    await executeDownloadJob({ ...opts, signal }, (error) => abort.abort(error));
+    signal.throwIfAborted();
+  } catch (error) {
+    abort.abort(error);
+    await opts.target.abort().catch(() => {});
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', wakePaused);
+  }
+}
+
+async function executeDownloadJob(opts: DownloadJobOptions, abortWorkers: (error: unknown) => void): Promise<void> {
   const { taskId, url, format, signal, pause, onProgress, target } = opts;
   const concurrency = Math.min(Math.max(opts.concurrency ?? 8, 1), 16);
 
@@ -150,10 +168,12 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      parsed = await parseM3u8Playlist(url, 0, undefined, { stripLeadAd: true });
+      signal.throwIfAborted();
+      parsed = await parseM3u8Playlist(url, 0, undefined, { stripLeadAd: true, signal });
       lastErr = undefined;
       break;
     } catch (err) {
+      signal.throwIfAborted();
       lastErr = err;
     }
   }
@@ -185,12 +205,13 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
   report(current, total, 'downloading');
 
   const worker = async (): Promise<void> => {
-    while (cursor < total) {
-      if (signal.aborted) return;
+    for (;;) {
+      signal.throwIfAborted();
       await pause.waitIfPaused();
+      signal.throwIfAborted();
+      // 检查与领取序号之间不能 await，否则并发恢复时会越过最后一个分片。
+      if (cursor >= total) return;
       const index = ++cursor; // 1 基
-      if (signal.aborted) return;
-      await pause.waitIfPaused();
       const cached = await cache.match(new Request(chunkKey(index)));
       if (cached) {
         // 已在恢复预统计里计入，不再累加——否则续传时进度重复计数超过 100%
@@ -199,28 +220,37 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
       const seg = parsed.segments[index - 1];
       let buffer: ArrayBuffer | undefined;
       for (let retry = 0; retry < MAX_SEGMENT_RETRIES; retry++) {
-        if (signal.aborted) return;
+        signal.throwIfAborted();
         try {
           buffer = await fetchSegment(seg.url, signal);
           break;
         } catch {
-          if (signal.aborted) return;
+          signal.throwIfAborted();
           await new Promise((r) => setTimeout(r, 1000 * (retry + 1)));
         }
       }
       if (!buffer) {
         throw new Error(`分片 ${index} 下载失败（已重试 ${MAX_SEGMENT_RETRIES} 次）`);
       }
+      signal.throwIfAborted();
       await cache.put(
         new Request(chunkKey(index)),
         new Response(buffer.slice(0), { headers: { 'Content-Type': 'video/mp2t' } })
       );
+      signal.throwIfAborted();
       current += 1;
       report(current, total, 'downloading');
     }
   };
-  await Promise.all(Array.from({ length: concurrency }, worker));
-  if (signal.aborted) return;
+  // 一个线程失败时停止其余线程，并等缓存写入全部退出后再交还任务句柄。
+  // 否则迟到的 put/report 会把 error 改回 downloading，或在取消清理后留下孤儿分片。
+  const workers = await Promise.allSettled(Array.from({ length: concurrency }, () => worker().catch((error) => {
+    abortWorkers(error);
+    throw error;
+  })));
+  const failed = workers.find((result) => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
+  signal.throwIfAborted();
 
   // —— 顺序写出（转封装 / 拼接） ——
   report(total, total, 'processing');
@@ -229,8 +259,9 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
     // → 播放器显示 13:15:21），必须在写出 initSegment 前回填真实值
     const transmuxer = new StreamingTransmuxer(target, { durationSeconds: parsed.totalDuration });
     for (let i = 1; i <= total; i++) {
-      if (signal.aborted) return;
+      signal.throwIfAborted();
       await pause.waitIfPaused();
+      signal.throwIfAborted();
       const resp = await cache.match(new Request(chunkKey(i)));
       if (!resp) throw new Error(`分片 ${i} 缓存丢失，请重试`);
       let data = await resp.arrayBuffer();
@@ -239,11 +270,13 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
       }
       await transmuxer.pushAndTransmux(new Uint8Array(data));
     }
+    signal.throwIfAborted();
     await transmuxer.finish();
   } else {
     for (let i = 1; i <= total; i++) {
-      if (signal.aborted) return;
+      signal.throwIfAborted();
       await pause.waitIfPaused();
+      signal.throwIfAborted();
       const resp = await cache.match(new Request(chunkKey(i)));
       if (!resp) throw new Error(`分片 ${i} 缓存丢失，请重试`);
       let data = await resp.arrayBuffer();
@@ -252,6 +285,7 @@ export async function runDownloadJob(opts: DownloadJobOptions): Promise<void> {
       }
       await target.write(new Uint8Array(data));
     }
+    signal.throwIfAborted();
     await target.close();
   }
   report(total, total, 'done');

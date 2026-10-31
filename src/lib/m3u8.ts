@@ -44,17 +44,24 @@ export function rewriteM3u8(
   prefix: string = PROXY_BASE
 ): string {
   if (depth > 5) return content;
+  const proxyUri = (uri: string) => {
+    if (isProxiedUri(uri)) return uri;
+    const absolute = makeAbsolute(uri, baseUrl);
+    // Inline keys and DRM schemes are interpreted by the player, not fetched by this proxy.
+    if (!/^https?:\/\//i.test(absolute)) return uri;
+    return prefix + encodeURIComponent(absolute);
+  };
   const lines = content.split('\n');
   const out = lines.map((line) => {
-    if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
-      return line.replace(/(URI=")([^"]+)(")/g, (m, p1: string, uri: string, p2: string) => {
-        if (isProxiedUri(uri)) return m;
-        return p1 + prefix + encodeURIComponent(makeAbsolute(uri, baseUrl)) + p2;
-      });
+    const trimmed = line.trim();
+    // URI attributes also occur on MEDIA (audio/subtitles), I-FRAME-STREAM-INF,
+    // SESSION-KEY, PART, PRELOAD-HINT and RENDITION-REPORT tags.
+    if (trimmed.startsWith('#EXT-X-')) {
+      return line.replace(/([,:]\s*URI\s*=\s*")([^"]+)(")/g,
+        (_match, before: string, uri: string, after: string) => before + proxyUri(uri) + after);
     }
-    if (line.startsWith('#') || line.trim() === '') return line;
-    if (isProxiedUri(line)) return line;
-    return prefix + encodeURIComponent(makeAbsolute(line, baseUrl));
+    if (trimmed.startsWith('#') || trimmed === '') return line;
+    return proxyUri(trimmed);
   });
   return out.join('\n');
 }

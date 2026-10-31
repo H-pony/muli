@@ -52,9 +52,9 @@ export function buildImageUrl(
 
 /**
  * 封面图降级候选链，各模式首选地址失败后由 SmartImage 按序回退（onError 逐级尝试）：
- * - direct 模式：原站直连 → cmliussss 公共镜像（腾讯 / 阿里，仅豆瓣图）→ 内置代理。
+ * - direct 模式：原站直连 → 内置代理 → cmliussss 公共镜像（仅豆瓣图）。
  *   doubanio 反爬对外域与空 Referer 分别返回 403 / 418，纯前端无法绕过；
- *   公共镜像实测直连可用，置于自家代理之前以节省服务器流量。
+ *   先走可伪装 Referer 的站内代理，避免不可用公共镜像拖延首屏。
  * - proxy 模式：内置代理 → 公共镜像（仅豆瓣图）→ 原站直连。
  *   代理是全站封面的公共依赖，不能单点——代理故障时自动落到直连/镜像。
  * - custom 模式为单一地址：模板错误应显式暴露，不被静默回退掩盖。
@@ -76,7 +76,7 @@ export function buildImageCandidates(
     return [...new Set([built, ...mirrors, url])];
   }
   if (mode !== 'direct') return [built];
-  return [...new Set([built, ...mirrors, `/api/proxy?url=${encodeURIComponent(url)}`])];
+  return [...new Set([built, `/api/proxy?url=${encodeURIComponent(url)}`, ...mirrors])];
 }
 
 export function validateSourceUrl(url: string): boolean {
@@ -101,6 +101,7 @@ export function buildWatchUrl(params: {
   episodeUrl?: string;
   sourceUrl?: string;
   detail?: string;
+  position?: number;
 }): string {
   const sp = new URLSearchParams();
   sp.set('source', params.sourceKey);
@@ -110,5 +111,6 @@ export function buildWatchUrl(params: {
   if (params.episodeUrl) sp.set('url', params.episodeUrl);
   if (params.sourceUrl) sp.set('sourceUrl', params.sourceUrl);
   if (params.detail) sp.set('detail', params.detail);
+  if (typeof params.position === 'number' && Number.isFinite(params.position) && params.position >= 0) sp.set('position', String(params.position));
   return `/watch?${sp.toString()}`;
 }

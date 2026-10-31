@@ -10,7 +10,13 @@ export interface SourceConfig {
   isAdult?: boolean;
 }
 
-export interface SearchResultItem {
+export interface ArtworkIdentifiers {
+  tmdbId?: number;
+  imdbId?: string;
+  doubanId?: string;
+}
+
+export interface SearchResultItem extends ArtworkIdentifiers {
   sourceKey: string;
   sourceName: string;
   vodId: string;
@@ -25,7 +31,7 @@ export interface SearchResultItem {
   isAdult?: boolean;
 }
 
-export interface VideoInfo {
+export interface VideoInfo extends ArtworkIdentifiers {
   title?: string;
   cover?: string;
   desc?: string;
@@ -51,6 +57,18 @@ export interface DoubanItem {
   cover: string;
   rating?: string;
   isTv?: boolean;
+  kind?: 'movie' | 'tv' | 'show';
+  rank?: number;
+  year?: string;
+  description?: string;
+  genres?: string[];
+  countries?: string[];
+  duration?: string;
+  directors?: string[];
+  actors?: string[];
+  backdrop?: string;
+  ratingCount?: number;
+  url?: string;
 }
 
 export interface SourceSearchOutcome {
@@ -98,7 +116,7 @@ export interface AuthStatusResponse {
   version: string;
   /** 部署者通过 DEFAULT_SOURCES 环境变量预置的采集站（未配置时为空数组） */
   defaultSources: SourceConfig[];
-  /** 部署者通过 DEFAULT_LIVE_SOURCES 环境变量预置的直播源（未配置时为空数组） */
+  /** 预置直播源：默认提供公开 IPTV 列表，DEFAULT_LIVE_SOURCES 可覆盖或用 [] 关闭 */
   defaultLiveSources: LiveSourceConfig[];
   /** 部署者通过 DEFAULT_SUBSCRIPTIONS 环境变量预置的 SourceList 订阅链接（未配置时为空数组） */
   defaultSubscriptions: { url: string; name?: string }[];
@@ -136,6 +154,8 @@ export interface LiveChannel {
 export interface LivePlaylistResponse {
   /** 订阅名（M3U 无名时为空） */
   name?: string;
+  /** M3U 头部声明的 XMLTV 节目单地址 */
+  epg?: string;
   channels: LiveChannel[];
   groups: string[];
 }
@@ -176,7 +196,7 @@ export type SubscriptionSkipReason =
 /** 订阅解析统计：说明跳过与截断情况，用于导入结果提示 */
 export interface SubscriptionParseStats {
   /** 识别出的订阅格式 */
-  format: 'libretv' | 'tvbox';
+  format: 'kongwotv' | 'tvbox';
   /** 被跳过的条目总数 */
   skipped: number;
   /** 跳过原因分类计数 */
@@ -190,7 +210,7 @@ export interface SubscriptionParseStats {
 /**
  * 远程订阅解析结果。
  * `sources` 为点播源（Apple CMS 采集站），`liveSources` 为直播源（M3U + 可选 EPG）。
- * 兼容两种订阅格式：LibreTV-SourceList JSON 与 TVBOX 配置 JSON（`sites` / `lives`）。
+ * 兼容两种订阅格式：幕里-SourceList JSON 与 TVBOX 配置 JSON（`sites` / `lives`）。
  * 老格式订阅只有 `sources`，此时 `liveSources` 为空数组。
  */
 export interface SourceListPayload {

@@ -11,7 +11,7 @@ import {
   runDownloadJob,
   type DownloadProgress,
 } from '@/lib/m3u8-downloader';
-import { detectSavingCapability, pickSaveTarget } from '@/lib/download-saver';
+import { detectSavingCapability, pickSaveTarget, type SaveTarget } from '@/lib/download-saver';
 
 /**
  * 全局下载管理器（UI 采用本站 Drawer 模式）：
@@ -22,9 +22,9 @@ import { detectSavingCapability, pickSaveTarget } from '@/lib/download-saver';
  */
 
 const MAX_CONCURRENT_DOWNLOADS = 3;
-const ADD_TASK_EVENT = 'libretv:add-download';
-const SHOW_MANAGER_EVENT = 'libretv:show-download-manager';
-export const DOWNLOADS_UPDATED_EVENT = 'libretv:downloads-updated';
+const ADD_TASK_EVENT = 'kongwotv:add-download';
+const SHOW_MANAGER_EVENT = 'kongwotv:show-download-manager';
+export const DOWNLOADS_UPDATED_EVENT = 'kongwotv:downloads-updated';
 
 export interface AddDownloadPayload {
   url: string;
@@ -36,8 +36,6 @@ export interface AddDownloadPayload {
 interface RunningHandle {
   abort: AbortController;
   pause: PauseResumeController;
-  /** 恢复后需要用户重选保存位置时置 false */
-  hasTarget: boolean;
 }
 
 export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -45,6 +43,10 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
   const [tasks, setTasks] = useState<DownloadTaskEntry[]>([]);
   const [capability, setCapability] = useState<'fs-access' | 'memory'>('memory');
   const running = useRef(new Map<string, RunningHandle>());
+  const targets = useRef(new Map<string, SaveTarget>());
+  const cancelled = useRef(new Set<string>());
+  const initialization = useRef<Promise<unknown>>(Promise.resolve());
+  const mounted = useRef(false);
 
   const refresh = useCallback(() => {
     void db.downloads.orderBy('createdAt').reverse().toArray().then(setTasks);
@@ -57,18 +59,24 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
 
   // —— 任务启动：选目标 → runDownloadJob ——
   const startTask = useCallback(
-    async (entry: DownloadTaskEntry, hasTarget: boolean) => {
-      if (running.current.has(entry.id)) return;
+    async (entry: DownloadTaskEntry) => {
+      if (!mounted.current || running.current.has(entry.id) || running.current.size >= MAX_CONCURRENT_DOWNLOADS) return;
+      const target = targets.current.get(entry.id);
+      if (!target) {
+        await updateEntry(entry.id, { status: 'paused' });
+        return;
+      }
       const abort = new AbortController();
       const pause = new PauseResumeController();
-      running.current.set(entry.id, { abort, pause, hasTarget });
+      running.current.set(entry.id, { abort, pause });
       await updateEntry(entry.id, { status: 'downloading' });
 
       const onProgress = (p: DownloadProgress) => {
+        if (abort.signal.aborted) return;
         void updateEntry(entry.id, {
           finished: p.current,
           total: p.total,
-          status: p.status === 'done' ? 'completed' : p.status === 'error' ? 'error' : 'downloading',
+          status: p.status === 'done' ? 'completed' : p.status === 'error' ? 'error' : pause.getPaused() ? 'paused' : 'downloading',
         });
       };
 
@@ -80,23 +88,12 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
         signal: abort.signal,
         pause,
         onProgress,
-        // hasTarget=false（刷新恢复/排队恢复）时目标已在手势内由「继续」按钮选好
-        target: (globalThis as unknown as { __dlSaveTarget?: { id: string; target: import('@/lib/download-saver').SaveTarget } }).__dlSaveTarget?.id === entry.id
-          ? (globalThis as unknown as { __dlSaveTarget: { target: import('@/lib/download-saver').SaveTarget } }).__dlSaveTarget.target
-          : {
-              // 目标已失效（页面刷新后句柄消亡）：显式报错引导用户点「继续」重选，
-              // 绝不能静默空写——否则任务会显示完成却产出空文件
-              kind: 'memory',
-              write: async () => {
-                throw new Error('保存位置已失效，请点击「继续」重新选择');
-              },
-              close: async () => {},
-              abort: async () => {},
-            },
+        target,
       });
 
       void job
         .then(async () => {
+          if (abort.signal.aborted) return;
           await updateEntry(entry.id, { status: 'completed' });
           void clearDownloadChunks(entry.id);
           toast(`《${entry.title}》下载完成`, 'success');
@@ -108,6 +105,8 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
         })
         .finally(() => {
           running.current.delete(entry.id);
+          targets.current.delete(entry.id);
+          if (cancelled.current.delete(entry.id)) void clearDownloadChunks(entry.id);
           scheduleNext();
         });
     },
@@ -118,20 +117,38 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
   // —— 全局并发调度 ——
   const scheduleNext = useCallback(() => {
     void (async () => {
+      await initialization.current;
+      if (!mounted.current) return;
       const runningCount = running.current.size;
       if (runningCount >= MAX_CONCURRENT_DOWNLOADS) return;
       const all = await db.downloads.orderBy('createdAt').toArray();
       const waiting = all.filter((t) => t.status === 'waiting' && !running.current.has(t.id));
       for (const t of waiting.slice(0, MAX_CONCURRENT_DOWNLOADS - runningCount)) {
-        const entry = t;
-        // 队列恢复的任务没有保存目标：以内存目标启动（分片已在本地，写出快）
-        void startTask(
-          { ...entry, format: entry.format },
-          (globalThis as { __dlSaveTarget?: { id: string } }).__dlSaveTarget?.id === entry.id
-        );
+        void startTask(t);
       }
     })();
   }, [startTask]);
+
+  // 刷新后文件句柄已消失：保留分片，等待用户手势重新选择保存位置。
+  useEffect(() => {
+    mounted.current = true;
+    const activeTasks = running.current;
+    const saveTargets = targets.current;
+    initialization.current = db.downloads.toCollection().modify((entry) => {
+      if (entry.status === 'waiting' || entry.status === 'downloading') {
+        entry.status = 'paused';
+        entry.updatedAt = Date.now();
+      }
+    }).then(refresh);
+    return () => {
+      mounted.current = false;
+      for (const handle of activeTasks.values()) {
+        handle.abort.abort();
+        handle.pause.destroy();
+      }
+      for (const target of saveTargets.values()) void target.abort();
+    };
+  }, [refresh]);
 
   // —— 事件：新增任务（用户手势内触发，可安全弹文件选择器） ——
   // 监听器必须常驻：播放页「下载本集」在抽屉关闭时也会派发事件，
@@ -158,16 +175,16 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
         // 用户手势内预选保存目标（FS Access 弹窗必须在手势内）
         try {
           const target = await pickSaveTarget(`${detail.title}.${format.toLowerCase()}`);
-          (globalThis as unknown as { __dlSaveTarget?: { id: string; target: import('@/lib/download-saver').SaveTarget } }).__dlSaveTarget = {
-            id,
-            target,
-          };
+          targets.current.set(id, target);
         } catch (err) {
           if (err instanceof Error && err.message.includes('取消')) {
             toast('已取消下载', 'info');
             return;
           }
+          toast(err instanceof Error ? err.message : '无法选择保存位置', 'error');
+          return;
         }
+        await initialization.current;
         await db.downloads.put(entry);
         refresh();
         scheduleNext();
@@ -196,31 +213,37 @@ export function DownloadManager({ isOpen, onClose }: { isOpen: boolean; onClose:
       await updateEntry(entry.id, { status: 'paused' });
       return;
     }
-    if (entry.status === 'paused' || entry.status === 'waiting' || entry.status === 'error') {
-      // 恢复：需要用户手势内重选保存目标（浏览器限制）
-      try {
-        const target = await pickSaveTarget(`${entry.title}.${entry.format.toLowerCase()}`);
-        (globalThis as unknown as { __dlSaveTarget?: { id: string; target: import('@/lib/download-saver').SaveTarget } }).__dlSaveTarget = {
-          id: entry.id,
-          target,
-        };
-        if (running.current.has(entry.id)) return;
-        await updateEntry(entry.id, { status: 'waiting' });
-        scheduleNext();
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('取消')) toast('已取消', 'info');
-      }
+    if (handle) {
+      handle.pause.resume();
+      await updateEntry(entry.id, { status: 'downloading' });
       return;
     }
-    void handle; // downloading 且无 handle：状态漂移，等待调度器自愈
+    if (entry.status === 'waiting' && targets.current.has(entry.id)) {
+      scheduleNext();
+      return;
+    }
+    // 页面刷新后或失败重试才重选保存位置；同一页面的暂停直接恢复原任务。
+    try {
+      const target = await pickSaveTarget(`${entry.title}.${entry.format.toLowerCase()}`);
+      targets.current.set(entry.id, target);
+      await updateEntry(entry.id, { status: 'waiting' });
+      scheduleNext();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '无法选择保存位置', 'info');
+    }
   };
 
   const onCancel = async (entry: DownloadTaskEntry) => {
-    running.current.get(entry.id)?.abort.abort();
-    running.current.delete(entry.id);
+    const handle = running.current.get(entry.id);
+    if (handle) cancelled.current.add(entry.id);
+    handle?.abort.abort();
+    handle?.pause.destroy();
+    await targets.current.get(entry.id)?.abort();
+    targets.current.delete(entry.id);
     await clearDownloadChunks(entry.id);
     await db.downloads.delete(entry.id);
     refresh();
+    scheduleNext();
     // 终态（已完成/失败）删的是记录而非终止任务；文件已保存在用户选择的位置，不受影响
     toast(
       entry.status === 'completed' || entry.status === 'error'

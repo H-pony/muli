@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        def buildCacheRepo = System.getenv('KONGWOTV_BUILD_MAVEN')
+        if (buildCacheRepo) maven { url = uri(buildCacheRepo) }
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'Muli-Android'
+include ':app'

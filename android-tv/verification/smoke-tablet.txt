@@ -1,0 +1,4 @@
+INSTRUMENTATION_RESULT: checks=application_label,visible_brand,screenshot_home,touch_navigation_1,live_navigation,screenshot_live,touch_navigation_2,search_input,screenshot_search,screenshot_details,responsive_details,decoded_video_playback,ascii_kongwotv_http_user_agent,pause_control,seek_control,screenshot_episodes,episode_switch,episode_decoded_playback,screenshot_player
+INSTRUMENTATION_RESULT: stream=PASS tablet [application_label, visible_brand, screenshot_home, touch_navigation_1, live_navigation, screenshot_live, touch_navigation_2, search_input, screenshot_search, screenshot_details, responsive_details, decoded_video_playback, ascii_kongwotv_http_user_agent, pause_control, seek_control, screenshot_episodes, episode_switch, episode_decoded_playback, screenshot_player]
+
+INSTRUMENTATION_CODE: -1

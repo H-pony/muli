@@ -20,3 +20,14 @@ docker-compose.yml
 docs
 README.md
 LICENSE
+
+# 原生客户端、安装包、测试截图和本机会话数据不属于 Web 镜像
+android-tv
+apple
+desktop
+dist
+dist-tv
+artifacts
+.mimosa
+.zcode
+.codebuddy

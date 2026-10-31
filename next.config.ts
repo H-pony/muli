@@ -15,7 +15,9 @@ function readAppVersion(): string {
 }
 
 const nextConfig: NextConfig = {
-  // standalone 输出仅供 Docker 镜像构建使用（DOCKER_BUILD=1）；
+  // Isolate playback verification from an already running packaged desktop server.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  // standalone 输出供 Docker、Web 部署包和桌面安装包使用（DOCKER_BUILD=1）；
   // 本地 next start 在 standalone 模式下不受支持，故按环境切换
   output: process.env.DOCKER_BUILD === '1' ? 'standalone' : undefined,
   reactStrictMode: true,

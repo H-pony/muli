@@ -78,12 +78,26 @@ describe('extractEpisodesFromPlayUrl', () => {
     expect(extractEpisodesFromPlayUrl(play)).toEqual(['https://cdn/a.mp4']);
   });
 
+  it('preserves dollar signs inside a signed URL and trims surrounding whitespace', () => {
+    expect(extractEpisodesFromPlayUrl('正片$ https://cdn.example/index.m3u8?token=abc$def&expires=123 '))
+      .toEqual(['https://cdn.example/index.m3u8?token=abc$def&expires=123']);
+  });
+
   it('空输入返回空数组', () => {
     expect(extractEpisodesFromPlayUrl('')).toEqual([]);
   });
 });
 
 describe('extractM3u8FromText', () => {
+  it('preserves signed query parameters and decodes HTML ampersands', () => {
+    const signed = 'https://cdn.example/index.m3u8?token=abc$def&expires=123';
+    expect(extractM3u8FromText(`正片$${signed}`)).toEqual([signed]);
+    expect(extractM3u8FromText('正片$https://cdn.example/index.m3u8?token=abc&amp;expires=123'))
+      .toEqual(['https://cdn.example/index.m3u8?token=abc&expires=123']);
+    expect(extractM3u8FromText('正片$https://cdn.example/index.m3u8?token=abc&#38;expires=123'))
+      .toEqual(['https://cdn.example/index.m3u8?token=abc&expires=123']);
+  });
+
   it('从简介中提取 m3u8 链接', () => {
     const text = '正片$https://cdn.com/x/index.m3u8 更多';
     expect(extractM3u8FromText(text)).toEqual(['https://cdn.com/x/index.m3u8']);
@@ -126,6 +140,12 @@ describe('parseDetailPageHtml', () => {
     expect(detail.episodes).toEqual(['https://cdn/ep1.m3u8', 'https://cdn/ep2.m3u8']);
     expect(detail.videoInfo.title).toBe('庆余年');
     expect(detail.videoInfo.desc).toBe('简介 内容');
+  });
+
+  it('keeps authentication parameters in escaped HTML playback data', () => {
+    const html = String.raw`<script>{"play":"正片$https:\/\/cdn.example\/index.m3u8?token=abc&amp;expires=123"}</script>`;
+    expect(parseDetailPageHtml(html, source).episodes)
+      .toEqual(['https://cdn.example/index.m3u8?token=abc&expires=123']);
   });
 
   it('非凡影视特征路径兜底', () => {

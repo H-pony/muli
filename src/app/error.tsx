@@ -16,7 +16,7 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[LibreTV] 页面渲染异常:', error);
+    console.error('[幕里] 页面渲染异常:', error);
   }, [error]);
 
   return (

@@ -1,19 +1,16 @@
 services:
-  libretv:
+  kongwotv:
     build: .
-    # 版本管理：镜像 tag 与 package.json 的 version 保持一致
-    # - 使用者：不设置 LIBRETV_IMAGE 即拉取 ghcr.io/librespark/libretv:latest（首次部署用 docker compose pull）
-    # - 开发者：docker compose up -d --build 会在本地构建并打上同名 tag
-    # - 需要固定版本时设置 LIBRETV_IMAGE=ghcr.io/librespark/libretv:2.0.1
-    image: ${LIBRETV_IMAGE:-ghcr.io/librespark/libretv:latest}
-    container_name: libretv
+    # 默认从本地源码构建；可设置自己的镜像地址用于发布
+    image: ${KONGWOTV_IMAGE:-kongwotv:2.16.12}
+    container_name: kongwotv
     restart: unless-stopped
     ports:
       - "8080:8080"
     # 无状态服务：观看历史在浏览器 IndexedDB、设置在 localStorage，无需挂载卷
     environment:
-      # 必填：访问密码（在 .env 中设置，缺失时 compose 启动即报错提醒）
-      - PASSWORD=${PASSWORD:?请在 .env 中设置 PASSWORD}
+      # 可选：访问密码；留空或未设置时直接访问，无需验证
+      - PASSWORD=${PASSWORD:-}
       # 可选：会话/代理签名密钥（多实例部署建议显式设置：openssl rand -hex 32）
       # - PROXY_SECRET=your-secret
       # 可选：Cookie Secure 策略覆盖（true=强制开启 / false=强制关闭；不设置时按请求协议自动推导，HTTP 部署无需配置）

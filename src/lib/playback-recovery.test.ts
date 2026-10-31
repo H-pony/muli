@@ -21,6 +21,25 @@ describe('PlaybackRecovery 决策表', () => {
     }
   });
 
+  it.each([404, 410])('HTTP %i immediately reports an expired playback address', (status) => {
+    const r = new PlaybackRecovery();
+    expect(r.onFatal('networkError', 'manifestLoadError', status)).toMatchObject({
+      action: 'switch-source', reason: expect.stringContaining(`当前线路已失效（HTTP ${status}）`),
+    });
+  });
+
+  it.each([401, 403])('HTTP %i reports upstream access denial after fallback', (status) => {
+    const r = new PlaybackRecovery();
+    expect(r.onFatal('networkError', 'fragLoadError', status)).toMatchObject({
+      action: 'switch-source', reason: expect.stringContaining(`上游拒绝访问当前线路（HTTP ${status}）`),
+    });
+  });
+
+  it('temporary HTTP failures retain bounded retry behavior', () => {
+    const r = new PlaybackRecovery();
+    expect(r.onFatal('networkError', 'manifestLoadError', 503)).toMatchObject({ action: 'retry', attempt: 1 });
+  });
+
   it('networkError：指数退避，超过上限换源', () => {
     const r = new PlaybackRecovery();
     const delays: number[] = [];

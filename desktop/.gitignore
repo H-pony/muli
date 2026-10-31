@@ -1,0 +1,8 @@
+node_modules/
+.staging/
+self-test-results/
+build/icon*.png
+build/icon*.ico
+build/icon*.icns
+build/*.iconset/
+build/icons/

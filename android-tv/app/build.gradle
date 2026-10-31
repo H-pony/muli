@@ -1,0 +1,100 @@
+plugins {
+    id 'com.android.application'
+}
+
+Properties signing = new Properties()
+def signingFile = rootProject.file('signing.properties')
+if (signingFile.exists()) {
+    signingFile.withInputStream { signing.load(it) }
+}
+
+android {
+    namespace 'org.kongwotv.tv'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'org.kongwotv.tv'
+        minSdk 21
+        targetSdk 35
+        versionCode 2161209
+        versionName '2.16.12'
+        testInstrumentationRunner 'org.kongwotv.tv.SmokeInstrumentation'
+    }
+
+    flavorDimensions 'device'
+    productFlavors {
+        tv {
+            dimension 'device'
+            applicationId 'org.kongwotv.tv'
+            versionCode 2161209
+            buildConfigField 'boolean', 'IS_TV', 'true'
+            resValue 'string', 'app_name', '幕里'
+            manifestPlaceholders = [mainOrientation: 'landscape', playerOrientation: 'landscape', appTheme: '@style/AppTheme']
+        }
+        mobile {
+            dimension 'device'
+            applicationId 'org.kongwotv.mobile'
+            buildConfigField 'boolean', 'IS_TV', 'false'
+            resValue 'string', 'app_name', '幕里'
+            manifestPlaceholders = [mainOrientation: 'fullSensor', playerOrientation: 'fullSensor', appTheme: '@style/MobileTheme']
+        }
+    }
+
+    signingConfigs {
+        if (signingFile.exists()) {
+            localRelease {
+                storeFile rootProject.file(signing.getProperty('storeFile'))
+                storePassword signing.getProperty('storePassword')
+                keyAlias signing.getProperty('keyAlias')
+                keyPassword signing.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (signingFile.exists()) {
+                signingConfig signingConfigs.localRelease
+            }
+        }
+    }
+    sourceSets {
+        main.assets.srcDir(rootProject.file('../shared'))
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+    buildFeatures { buildConfig true }
+    testBuildType 'release'
+    testOptions {
+        unitTests.returnDefaultValues = true
+        unitTests.all {
+            systemProperty 'kongwotv.artwork.catalog', rootProject.file('../shared/artwork-catalog.json').absolutePath
+        }
+    }
+    packaging { resources.excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*'] }
+
+    applicationVariants.all { variant ->
+        if (variant.buildType.name == 'release') {
+            variant.outputs.all {
+                def client = variant.flavorName == 'tv' ? 'AndroidTV' : 'Android'
+                outputFileName = "幕里-${client}-${variant.versionName}.apk"
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.5.1'
+    implementation 'androidx.media3:media3-ui:1.5.1'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    androidTestImplementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}

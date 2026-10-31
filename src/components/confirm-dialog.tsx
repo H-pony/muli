@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useBodyScrollLock } from './use-body-scroll-lock';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { isTopFocusLayer, useFocusTrap } from './use-focus-trap';
 
 /**
  * 破坏性操作确认弹窗（分级确认中的「重操作」）：
@@ -31,32 +33,28 @@ export function ConfirmDialog({
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const descriptionId = useId();
+  const cancelCallback = useRef(onCancel);
+  cancelCallback.current = onCancel;
+  useFocusTrap(open, panelRef);
 
   useEffect(() => {
     if (!open) return;
     // 危险操作默认聚焦「取消」，回车不会误触破坏性动作
     (danger ? cancelRef : confirmRef).current?.focus();
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onCancel();
-      } else if (e.key === 'Enter' && !danger) {
+      if (e.key === 'Escape' && isTopFocusLayer(panelRef.current)) {
         e.preventDefault();
-        onConfirm();
+        e.stopPropagation();
+        cancelCallback.current();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, danger, onCancel, onConfirm]);
+  }, [open, danger]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   if (!open) return null;
 
@@ -64,13 +62,16 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 animate-fade-in" onClick={onCancel} aria-hidden />
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="relative bg-surface-raised rounded-xl w-full max-w-sm shadow-2xl p-5 animate-slide-up"
+        aria-describedby={message ? descriptionId : undefined}
+        className="tv-confirm-dialog relative bg-surface-raised rounded-xl w-full max-w-sm shadow-2xl p-5 animate-slide-up"
       >
         <h2 className="text-base font-semibold text-content mb-2">{title}</h2>
-        {message && <div className="text-sm text-muted leading-relaxed">{message}</div>}
+        {message && <div id={descriptionId} className="text-sm text-muted leading-relaxed">{message}</div>}
         <div className="flex gap-2 justify-end mt-5">
           <button ref={cancelRef} className="btn-ghost text-sm" onClick={onCancel}>
             {cancelLabel}
@@ -78,8 +79,8 @@ export function ConfirmDialog({
           <button
             ref={confirmRef}
             className={cn(
-              'btn text-sm text-white',
-              danger ? 'bg-danger hover:bg-danger-hover' : 'bg-accent hover:bg-accent-hover'
+              'btn text-sm',
+              danger ? 'bg-danger-solid text-white hover:opacity-90' : 'bg-accent text-on-accent hover:bg-accent-hover'
             )}
             onClick={onConfirm}
           >

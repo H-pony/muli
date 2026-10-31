@@ -1,0 +1,20 @@
+{
+  "brandName": "幕里",
+  "selectedConcept": "第三款：藏光",
+  "colors": [
+    "#000000",
+    "#FFFFFF"
+  ],
+  "status": "applied",
+  "generator": "built-in ImageGen",
+  "sourceConcept": "/Users/kongwo/.codex/generated_images/01a15c95-3f0f-7673-a668-9f051c30b119/exec-194cc4e0-c2df-4635-8a51-ed2f851abec2.png",
+  "editBrief": "保留第三款图形的轮廓、比例、圆角和弧形留白。原蓝色、黄色两块均改为纯黑；白底黑标，黑底白标；字标为幕里；无渐变、阴影或额外装饰。",
+  "preview": "logo-monochrome-preview.png",
+  "master": "shared/brand/muli-mark-source.png",
+  "exports": [
+    "public/brand/muli-mark-black.png",
+    "public/brand/muli-mark-white.png",
+    "public/icons/icon-1024.png"
+  ],
+  "compatibility": "Keep existing install identifiers, user data directories and storage keys."
+}

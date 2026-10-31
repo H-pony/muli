@@ -3,7 +3,8 @@ import { guardRequest, jsonError } from '@/lib/api-guard';
 import { checkLiveUrlAllowed } from '@/lib/ssrf';
 import { fetchUpstream } from '@/lib/fetch-utils';
 import { getLiveCache, setLiveCache } from '@/lib/live-cache';
-import { parseM3u } from '@/lib/m3u-parser';
+import { parseM3u, parseM3uEpg } from '@/lib/m3u-parser';
+import { BUILTIN_LIVE_URL, builtinLivePlaylist } from '@/lib/default-live-sources';
 import type { LivePlaylistResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,7 @@ function extractPlaylistName(content: string): string | undefined {
 /** 反序列化为 M3U 文本（订阅导出用） */
 function toM3uText(playlist: LivePlaylistResponse): string {
   const esc = (s: string) => s.replace(/"/g, "'");
-  const lines = ['#EXTM3U'];
+  const lines = [playlist.epg ? `#EXTM3U x-tvg-url="${esc(playlist.epg)}"` : '#EXTM3U'];
   if (playlist.name) lines.push(`#PLAYLIST:${playlist.name}`);
   for (const c of playlist.channels) {
     const attrs = [
@@ -57,12 +58,17 @@ export async function GET(req: Request) {
   const format = sp.get('format') || 'json';
   const force = sp.get('force') === '1';
 
-  // 直播专用校验：默认拒绝内网，部署者可设 LIVE_ALLOW_PRIVATE=1 放行自建 IPTV
-  const verdict = await checkLiveUrlAllowed(url);
-  if (!verdict.ok) return jsonError(verdict.reason, 403);
+  // Only this exact bundled identifier is local; all arbitrary URLs still pass SSRF checks.
+  const bundled = url === BUILTIN_LIVE_URL;
+  if (!bundled) {
+    const verdict = await checkLiveUrlAllowed(url);
+    if (!verdict.ok) return jsonError(verdict.reason, 403);
+  }
 
   // 直播专用缓存：数千频道的播放列表 JSON 不与豆瓣等热点数据共池（通用缓存超限会整体 clear）
-  let playlist: LivePlaylistResponse | undefined = force ? undefined : getLiveCache<LivePlaylistResponse>(cacheKey(url));
+  let playlist: LivePlaylistResponse | undefined = bundled
+    ? builtinLivePlaylist()
+    : force ? undefined : getLiveCache<LivePlaylistResponse>(cacheKey(url));
   if (!playlist) {
     let text: string;
     try {
@@ -82,7 +88,7 @@ export async function GET(req: Request) {
     const groups = [...new Set(channels.map((c) => c.group).filter((g): g is string => Boolean(g)))].sort(
       (a, b) => a.localeCompare(b, 'zh')
     );
-    playlist = { name: extractPlaylistName(text), channels, groups };
+    playlist = { name: extractPlaylistName(text), epg: parseM3uEpg(text, url), channels, groups };
     setLiveCache(cacheKey(url), playlist, CACHE_TTL_MS, text.length);
   }
 

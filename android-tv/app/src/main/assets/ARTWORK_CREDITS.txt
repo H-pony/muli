@@ -1,0 +1,42 @@
+幕里 Android — Artwork Credits
+====================================
+
+The original 幕里 launcher mark is shared with the other project clients.
+The Android TV banner is an original layout using the same approved mark.
+Assets: res/mipmap-*/ic_launcher.png, res/drawable-nodpi/tv_banner.png,
+res/drawable-nodpi/kongwotv_mark.png (legacy resource name retained).
+Design: a rounded curtain plane and a smaller lower-right block, separated
+by a curved light gap, rendered in black and white. The banner uses the
+white mark and the wordmark 幕里 on a black background.
+Shared source icon: public/icons/icon-1024.png in the project root.
+Artwork generator: tools/generate_brand_artwork.py.
+These original graphics are distributed under AGPL-3.0-or-later with this client.
+
+Asset: res/drawable-nodpi/atmosphere_mountains.jpg
+Android resource: R.drawable.atmosphere_mountains
+Description: Mountain lake, cloud-covered peaks and a wooden boathouse.
+Photographer: Luca Bravo
+Source: Unsplash
+Original photo page:
+https://unsplash.com/photos/brown-house-near-body-of-water-zAjdgNXsMeg
+
+Actual downloaded image URL:
+https://images.unsplash.com/photo-1470770841072-f978cf4d019e?fm=jpg&fit=crop&w=1920&h=1080&q=88
+
+License: Unsplash License
+https://unsplash.com/license
+
+The Unsplash License permits downloading, copying, modifying, distributing
+and using photos for free, including for commercial purposes, without asking
+permission or providing attribution. Attribution is appreciated. The license
+does not permit selling photos without significant modification or compiling
+photos to replicate a similar or competing service. See the license URL for
+the complete, controlling terms.
+
+Local file: JPEG, 1920 x 1080, 464895 bytes.
+Transformation: Unsplash image-service crop/resize and JPEG encoding using
+the parameters in the download URL above; no additional local image edits.
+SHA-256: d55f11c807af6c3c1e7d5664ba8f20b0d903d381a7155443edaf69160f66f8ba
+
+This photograph is provided by the credited public source and is not Apple
+artwork. Existing third-party library license notices remain separate.

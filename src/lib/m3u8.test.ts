@@ -43,6 +43,37 @@ describe('rewriteM3u8', () => {
     expect(rewriteM3u8(legacyLive, BASE, 0, '/api/live/stream?url=')).toBe(legacyLive);
   });
 
+  it('rewrites audio, subtitles, iframe, session key and low-latency URI attributes', () => {
+    const tags = [
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",URI="audio/index.m3u8?token=a,b"',
+      '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",URI="/subs/index.m3u8"',
+      '#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=1000,URI="iframe.m3u8"',
+      '#EXT-X-SESSION-KEY:METHOD=AES-128,URI="https://keys.example/key"',
+      '#EXT-X-PART:DURATION=0.5,URI="part.m4s"',
+      '#EXT-X-PRELOAD-HINT:TYPE=PART,URI="next.m4s"',
+      '#EXT-X-RENDITION-REPORT:URI="../other/index.m3u8",LAST-MSN=10',
+    ];
+    const out = rewriteM3u8(tags.join('\n'), BASE, 0, '/api/live/stream?url=');
+    for (const uri of ['audio/index.m3u8?token=a,b', '/subs/index.m3u8', 'iframe.m3u8', 'https://keys.example/key', 'part.m4s', 'next.m4s', '../other/index.m3u8']) {
+      expect(out).toContain(`URI="/api/live/stream?url=${encodeURIComponent(new URL(uri, BASE).href)}"`);
+    }
+  });
+
+  it('preserves inline keys, DRM schemes and already proxied attributes', () => {
+    const input = [
+      '#EXT-X-KEY:METHOD=AES-128,URI="data:application/octet-stream;base64,AAAA"',
+      '#EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="skd://key-id"',
+      '#EXT-X-MEDIA:TYPE=AUDIO,URI="/api/proxy?url=https%3A%2F%2Fcdn.example.com%2Faudio.m3u8"',
+    ].join('\n');
+    expect(rewriteM3u8(input, BASE)).toBe(input);
+  });
+
+  it('normalizes CRLF and whitespace around bare segment addresses', () => {
+    expect(rewriteM3u8('#EXTM3U\r\n  segment.ts\r\n', BASE)).toContain(
+      '/api/proxy?url=' + encodeURIComponent('https://cdn.example.com/live/segment.ts')
+    );
+  });
+
   it('超过递归深度限制时原样返回', () => {
     const input = 'https://a.ts';
     expect(rewriteM3u8(input, BASE, 6)).toBe(input);

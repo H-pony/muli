@@ -1,0 +1,10 @@
+Homepage atmosphere artwork
+
+Photograph: Luca Bravo / Unsplash
+Original photograph: https://unsplash.com/photos/brown-house-near-body-of-water-zAjdgNXsMeg
+Image source: https://images.unsplash.com/photo-1470770841072-f978cf4d019e?fm=jpg&fit=crop&w=1920&h=1080&q=88
+License: Unsplash License — https://unsplash.com/license
+
+The bundled atmosphere-mountains.jpg is a 1920 × 1080 version of this photograph, reused from the LibreTV Android TV theme. It is decorative background artwork. Film and series cover images are supplied by the user's selected recommendation and video sources.
+
+The UI uses the custom 幕里 identity and its approved monochrome mark; no Apple logos or proprietary Apple artwork are included.

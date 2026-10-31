@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
 import Hls, { type HlsConfig } from 'hls.js';
 import { Spinner } from './states';
+import { PlayerChrome } from './player-chrome';
+import { builtinLiveFormat } from '@/lib/default-live-sources';
 
 /**
  * 直播播放器：与点播 player-shell 完全独立。
@@ -21,7 +24,7 @@ const STREAM_PROXY_PREFIX = '/api/live/stream';
 const STREAM_PROXY_BASE = '/api/live/stream?url=';
 
 export function isFlvUrl(url: string): boolean {
-  return /\.flv(\?|$)/i.test(url);
+  return builtinLiveFormat(url) === 'flv' || /\.flv(\?|$)/i.test(url);
 }
 
 /** 浏览器原生可播的直链容器（非 HLS/FLV） */
@@ -46,15 +49,22 @@ interface LivePlayerProps {
   /** 上一台/下一台：传入时注册为播放器控制条按钮（全屏内也可操作） */
   onPrevChannel?: () => void;
   onNextChannel?: () => void;
+  onNextLine?: () => void;
+  items?: readonly string[];
+  currentItem?: number;
+  onSelectItem?: (index: number) => void;
+  onBack?: () => void;
 }
 
-export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePlayerProps) {
+export function LivePlayer({ url, title, onPrevChannel, onNextChannel, onNextLine, items, currentItem, onSelectItem, onBack }: LivePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const artRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const loadMediaRef = useRef<((video: HTMLVideoElement) => void) | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mpegtsRef = useRef<any>(null);
+  const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [loading, setLoading] = useState(true);
@@ -62,21 +72,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
   const [retryNonce, setRetryNonce] = useState(0);
   // 起播前的品牌占位图（与点播 player-shell 共用 /player-poster.png），实际开始播放后隐藏
   const [showPoster, setShowPoster] = useState(true);
-  // 换台 OSD：切台后短暂显示频道名（键盘换台/控制条换台时的视觉反馈，全屏内同样可见）
-  const [osdTitle, setOsdTitle] = useState('');
-  const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // url 变化即换台：显示频道名 2.5s
-  useEffect(() => {
-    if (!url) return;
-    setOsdTitle(title);
-    if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
-    osdTimerRef.current = setTimeout(() => setOsdTitle(''), 2500);
-    return () => {
-      if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
-    };
-  }, [url, title]);
 
   const showHint = (text: string) => {
     setHint(text);
@@ -87,9 +83,13 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
   useEffect(() => {
     if (!containerRef.current || !url) return;
     setError('');
+    setHint('');
     setLoading(true);
     setShowPoster(true);
 
+    // HTTPS 页面上的 HTTP IPTV 必须直接走同源代理，避免混合内容被浏览器拦截。
+    const proxyFirst = window.location.protocol === 'https:' && /^http:/i.test(url);
+    const initialMediaUrl = proxyFirst ? proxyUrl(url) : url;
     let playbackStarted = false;
     let disposed = false;
     let destroyed = false;
@@ -143,6 +143,14 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     /** HLS 直播参数：小缓冲、快速追帧；与点播（大缓冲、进度恢复）刻意区分 */
     const setupHls = (video: HTMLVideoElement, mediaUrl: string, stage: 'direct' | 'proxy') => {
       cleanupEngines();
+      if (!Hls.isSupported()) {
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          setupNative(video, mediaUrl, stage === 'direct');
+        } else {
+          setError('当前浏览器不支持此直播格式，请尝试其他浏览器或线路');
+        }
+        return;
+      }
       let liveNetRetryCount = 0;
       let mediaRecoverCount = 0;
       const hlsConfig: Partial<HlsConfig> = {
@@ -201,7 +209,7 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           }
           // HLS 直连与代理均失败：可能是"无 .m3u8 后缀但内容是 MP4"的源，回退原生播放
           showHint('HLS 解析失败，尝试原生播放...');
-          setupNative(video, url, true, `直播流加载失败${codeHint}，可能该频道已失效，请尝试其他频道`);
+          setupNative(video, initialMediaUrl, !proxyFirst, `直播流加载失败${codeHint}，可尝试切换线路`);
           return;
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -265,39 +273,23 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
     };
 
     const engine = engineOf(url);
-    // 上一台/下一台：注册到播放器控制条（普通态与全屏均可见），未传不显示
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const controls: any[] = [];
-    const channelBtnSvg = (path: string) =>
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="${path}"/></svg>`;
-    if (onPrevChannel) {
-      controls.push({
-        name: 'prev-channel',
-        position: 'left',
-        index: 0,
-        html: channelBtnSvg('M11 19l-7-7 7-7m8 14l-7-7 7-7'),
-        tooltip: '上一台',
-        click: () => onPrevChannel(),
-      });
-    }
-    if (onNextChannel) {
-      controls.push({
-        name: 'next-channel',
-        position: 'left',
-        index: 1,
-        html: channelBtnSvg('M13 5l7 7-7 7M5 5l7 7-7 7'),
-        tooltip: '下一台',
-        click: () => onNextChannel(),
-      });
-    }
-    const art = new Artplayer({
+    let sourceLoaded = false;
+    const loadMedia = (video: HTMLVideoElement) => {
+      if (disposed || destroyed) return;
+      sourceLoaded = true;
+      if (engine === 'flv') void setupFlv(video, initialMediaUrl, !proxyFirst);
+      else if (engine === 'native') setupNative(video, initialMediaUrl, !proxyFirst);
+      else setupHls(video, initialMediaUrl, proxyFirst ? 'proxy' : 'direct');
+    };
+    loadMediaRef.current = loadMedia;
+    const art = artRef.current || new Artplayer({
       container: containerRef.current,
-      url,
-      // 原生容器统一用 'mp4'（仅用于选择处理函数，实际容器由浏览器嗅探）
-      type: engine === 'flv' ? 'flv' : engine === 'native' ? 'mp4' : 'm3u8',
+      url: '',
+      type: 'kongwotv-live',
+      customType: { 'kongwotv-live': (video: HTMLVideoElement) => loadMediaRef.current?.(video) },
+      isLive: true,
       volume: 0.9,
       autoplay: true,
-      // —— 直播态：关闭点播专属能力 ——
       pip: true,
       screenshot: false,
       setting: false,
@@ -311,73 +303,71 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
       backdrop: true,
       playsInline: true,
       airplay: true,
-      theme: '#2563eb',
-      controls,
+      theme: '#ff6699',
       lang: navigator.language.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en',
       moreVideoAttr: { playsInline: true },
-      customType: {
-        m3u8: (video: HTMLVideoElement) => {
-          setupHls(video, url, 'direct');
-        },
-        flv: (video: HTMLVideoElement) => {
-          void setupFlv(video, url, true);
-        },
-        mp4: (video: HTMLVideoElement) => {
-          setupNative(video, url, true);
-        },
-      },
     });
-    artRef.current = art;
-    art.on('video:loadedmetadata', () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (art as any).title = title;
-      } catch { /* 忽略 */ }
-    });
-    art.on('video:playing', () => {
-      playbackStarted = true;
-      setLoading(false);
-      setShowPoster(false);
-      setError('');
-    });
-    art.on('video:error', () => {
-      // mpegts 走自身 ERROR 事件；这里兜底其它未知错误
-      if (!mpegtsRef.current) setError('视频播放失败，请尝试其他频道');
-    });
-    art.on('ready', () => {
-      // 直播隐藏进度条（ArtPlayer 无原生 isLive 开关）
-      try {
-        const progress = art.controls?.progress as HTMLElement | undefined;
-        if (progress) progress.style.display = 'none';
-      } catch { /* 忽略 */ }
-    });
+    if (!artRef.current) {
+      artRef.current = art;
+      art.template.$player.style.isolation = 'isolate';
+      setOverlayRoot(art.template.$player);
+    }
+    const onMetadata = () => {
+      try { art.title = title; } catch { /* Metadata does not gate playback. */ }
+    };
+    const onPlaying = () => {
+      if (disposed) return;
+      playbackStarted = true; setLoading(false); setShowPoster(false); setError('');
+    };
+    const onWaiting = () => { if (!disposed) setLoading(true); };
+    const onVideoError = () => {
+      if (!disposed && !mpegtsRef.current) setError('视频播放失败，请尝试其他频道');
+    };
+    art.on('video:loadedmetadata', onMetadata);
+    art.on('video:playing', onPlaying);
+    art.on('video:waiting', onWaiting);
+    art.on('video:error', onVideoError);
+    art.option.url = url;
+    if (!sourceLoaded) loadMedia(art.video);
 
-    // 15s 内未起播则提示
     const startTimer = setTimeout(() => {
-      if (!playbackStarted && !disposed && !destroyed) {
-        setError('频道加载超时，可能该源已失效，请尝试其他频道');
-      }
+      if (!playbackStarted && !disposed && !destroyed) setError('频道加载超时，可能该源已失效，请尝试其他频道');
     }, 15000);
-
     return () => {
-      disposed = true;
+      disposed = true; destroyed = true;
       clearTimeout(startTimer);
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-      cleanupEngines();
-      art.destroy();
-      artRef.current = null;
-      destroyed = true;
+      art.off('video:loadedmetadata', onMetadata); art.off('video:playing', onPlaying);
+      art.off('video:waiting', onWaiting); art.off('video:error', onVideoError);
+      if (loadMediaRef.current === loadMedia) loadMediaRef.current = null;
+      cleanupEngines(); art.video.pause();
     };
+    // The media engine changes per source; the control root is released only on unmount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, retryNonce, onPrevChannel, onNextChannel]);
+  }, [url, retryNonce]);
+
+  useEffect(() => () => {
+    const art = artRef.current;
+    if (!art) return;
+    try { if (art.fullscreenWeb) art.fullscreenWeb = false; } catch { /* Already closed. */ }
+    try {
+      if (document.fullscreenElement && art.template.$player.contains(document.fullscreenElement)) void document.exitFullscreen().catch(() => {});
+      else if (art.fullscreen) art.fullscreen = false;
+    } catch { /* The browser may have ended fullscreen. */ }
+    art.destroy(); artRef.current = null;
+  }, []);
 
   return (
-    <div className="relative w-full h-full">
+    <div className="tv-live-player relative h-full w-full min-w-0 overflow-hidden rounded-3xl bg-black">
       <div ref={containerRef} className="w-full h-full" />
+      {overlayRoot && createPortal(<>
+      <PlayerChrome player={artRef.current} title={title} mediaKey={url} live unavailable={!!error}
+        items={items} currentItem={currentItem} onSelectItem={onSelectItem} onBack={onBack}
+        onPrevious={onPrevChannel} onNext={onNextChannel} onNextLine={onNextLine} onHint={showHint} />
       {/* 起播前的品牌占位图 */}
       {showPoster && !error && (
         <div
-          className="absolute inset-0 bg-black pointer-events-none"
+          className="absolute inset-0 z-10 bg-black pointer-events-none"
           style={{
             backgroundImage: 'url(/player-poster.png)',
             backgroundSize: 'contain',
@@ -386,29 +376,16 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           }}
         />
       )}
-      {/* LIVE 呼吸标识 */}
-      {!error && (
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-full pointer-events-none">
-          <span className="live-dot" />
-          <span className="text-[10px] font-semibold text-white tracking-wider">LIVE</span>
-        </div>
-      )}
-      {/* 换台 OSD：频道名（全屏内同样可见） */}
-      {osdTitle && !error && (
-        <div className="absolute top-3 left-3 flex items-center max-w-[70%] bg-black/60 px-3 py-1.5 rounded-full pointer-events-none animate-fade-in">
-          <span className="text-sm font-medium text-white truncate">{osdTitle}</span>
-        </div>
-      )}
       {loading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/30">
           <Spinner size="lg" tone="onDark" />
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80">
-          <p className="text-danger text-sm px-4 text-center">{error}</p>
+        <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-black/85 p-4 sm:gap-4 sm:p-6">
+          <p className="max-w-md text-center text-xs leading-relaxed text-white/70 sm:text-sm">{error}</p>
           <button
-            className="btn-ghost text-xs !bg-white/10 !text-white !border-white/20"
+            className="btn-ghost !rounded-full !border-transparent !bg-[#f3f4f7] !px-5 !py-2 text-xs !text-[#15151a] hover:!bg-white"
             onClick={() => {
               // 重建播放器实例即可，无需整页刷新
               setError('');
@@ -418,13 +395,19 @@ export function LivePlayer({ url, title, onPrevChannel, onNextChannel }: LivePla
           >
             重新加载
           </button>
+          {onNextLine && (
+            <button className="btn-ghost !rounded-full !border-white/20 !text-white/85 text-xs" onClick={onNextLine}>
+              切换下一线路
+            </button>
+          )}
         </div>
       )}
       {hint && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm px-3 py-1.5 rounded-full pointer-events-none animate-fade-in">
+        <div className="bili-player-hint" role="status">
           {hint}
         </div>
       )}
+      </>, overlayRoot)}
     </div>
   );
 }

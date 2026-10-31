@@ -12,3 +12,20 @@ vitest-results.json
 .zcode/
 .codebuddy/
 generated-images/
+
+# 多端安装包和本机验证产物
+dist/
+dist-tv/
+artifacts/
+.next-source-integration/
+.next-product-audit/
+
+# macOS 本地文件
+.DS_Store
+
+# 本地构建证据与原始接口抓取（保留整理后的报告）
+android-tv/build-evidence/
+docs/source-verification/**/evidence/
+docs/source-integration/**/evidence/
+docs/source-verification/**/results.json
+docs/source-integration/**/results.json

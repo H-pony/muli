@@ -9,13 +9,19 @@ import { DetailModal } from '@/components/detail-modal';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
 import { useAppStore, resolveSource, isInDisabledSubscription, isSourceDisabled } from '@/lib/store';
 import { api } from '@/lib/client-api';
-import type { SearchResultItem, SourceSearchOutcome } from '@/lib/types';
+import type { DoubanItem, SearchResultItem, SourceSearchOutcome } from '@/lib/types';
 import { SearchHistoryDropdown, useSearchHistory } from '@/components/search-history';
 import { cn, formatDisableTtl, validateSourceUrl } from '@/lib/utils';
 import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
 import { SiteFooter } from '@/components/site-footer';
+import { ContinueWatchingSection, FeaturedPremiere, LiveRibbon, WatchlistSection } from '@/components/cinematic-home';
+import { RankingSection, type CatalogCategory } from '@/components/ranking-section';
+import { DiscoveryFeed } from '@/components/discovery-feed';
+import { defaultDiscoveryFilters } from '@/lib/discovery-model';
+import { readNavigationEntry, rememberNavigationEntry } from '@/lib/navigation';
+import { useNavigationLayer, useNavigationScrollRestoration } from '@/lib/navigation-hooks';
 
 /**
  * 首页：搜索（URL ?s= 驱动，可后退/分享）+ 豆瓣推荐。
@@ -37,6 +43,9 @@ function HomeContent() {
   const router = useRouter();
   const { toast } = useToast();
   const urlQuery = searchParams.get('s') || '';
+  const view = searchParams.get('view');
+  const category: CatalogCategory = view === 'movies' || view === 'tv' || view === 'shows' ? view : 'all';
+  const browsing = category !== 'all';
   // 精确订阅所需字段（对齐 live 页的做法）：搜索流式期间逐源写健康度、
   // 打开设置抽屉/历史面板等无关 store 变化，都不应触发首页整树重渲染
   const customAPIs = useAppStore((s) => s.customAPIs);
@@ -46,14 +55,27 @@ function HomeContent() {
   const sourceHealth = useAppStore((s) => s.sourceHealth);
   const subscriptions = useAppStore((s) => s.subscriptions);
   const [input, setInput] = useState(urlQuery);
-  const [detailItem, setDetailItem] = useState<SearchResultItem | null>(null);
+  const detailNavigation = useNavigationLayer<{ item: SearchResultItem | null; catalogItem: DoubanItem | null; relatedItems: DoubanItem[] }>('detail');
+  const detailItem = detailNavigation.layer?.data.item ?? null;
+  const catalogItem = detailNavigation.layer?.data.catalogItem ?? null;
+  const relatedItems = detailNavigation.layer?.data.relatedItems ?? [];
+  useNavigationScrollRestoration();
+  const supplementalEnabled = useAppStore((s) => s.doubanEnabled && s.recommendSource !== 'hot-list');
+  const openCatalog = (item: DoubanItem, related: DoubanItem[]) => {
+    rememberNavigationEntry({ homeVisibleCount: visibleCount });
+    detailNavigation.open({ item: null, catalogItem: item, relatedItems: related });
+  };
+  const openResult = (item: SearchResultItem) => {
+    rememberNavigationEntry({ homeVisibleCount: visibleCount });
+    detailNavigation.open({ item, catalogItem: null, relatedItems: [] });
+  };
   /** 流式搜索中已结算的源（data 就绪前用于增量渲染） */
-  const [streamedOutcomes, setStreamedOutcomes] = useState<SourceSearchOutcome[]>([]);
+  const [streamed, setStreamed] = useState<{ key: string; outcomes: SourceSearchOutcome[] }>({ key: '', outcomes: [] });
   const inputRef = useRef<HTMLInputElement>(null);
 
   // URL 驱动搜索：?s= 变化时回填输入框
   useEffect(() => {
-    if (urlQuery) setInput(urlQuery);
+    setInput(urlQuery);
   }, [urlQuery]);
 
   // 源名回显：失败/停用提示里显示友好名称而非裸 key
@@ -90,16 +112,20 @@ function HomeContent() {
     [selectedKeys, sourceHealth, subscriptions]
   );
 
+  // Include configuration identity, but not health updates produced by this request itself.
+  const searchIdentity = JSON.stringify([urlQuery, selectedKeys, customAPIs, envSources, subscriptions.map((item) => [item.url, item.enabled]), yellowFilter]);
+  const streamedOutcomes = useMemo(() => streamed.key === searchIdentity ? streamed.outcomes : [], [streamed, searchIdentity]);
   const searchQuery = useQuery({
-    queryKey: ['search', urlQuery, selectedKeys, yellowFilter],
+    queryKey: ['search', searchIdentity],
     // 与 runSearch 的截断规则保持一致：顶栏搜索 / 手动构造长链接不会绕过上限
     queryFn: ({ signal }) => {
-      setStreamedOutcomes([]);
+      setStreamed({ key: searchIdentity, outcomes: [] });
       return api.search(urlQuery.slice(0, 100), selectedSources, yellowFilter, {
         signal,
         // 逐源结算即更新：结果边搜边渲染，同时滚动健康度
         onSource: (outcome) => {
-          setStreamedOutcomes((prev) => [...prev, outcome]);
+          if (signal.aborted) return;
+          setStreamed((prev) => ({ key: searchIdentity, outcomes: [...(prev.key === searchIdentity ? prev.outcomes : []), outcome] }));
           for (const ev of useAppStore.getState().recordSourceHealth([outcome])) {
             toast(
               ev.permanent
@@ -114,6 +140,7 @@ function HomeContent() {
     enabled: Boolean(urlQuery) && selectedSources.length > 0,
     // 5 分钟内从播放页返回时直接使用缓存，不重新搜索（服务端另有 60s 结果缓存兜底）
     staleTime: 300_000,
+    retry: false,
   });
 
   // 最近搜索改为搜索框下拉（聚焦展开、按输入过滤），不再常驻首屏
@@ -128,6 +155,11 @@ function HomeContent() {
     }
     if (selectedSources.length === 0) {
       toast('请先在设置中添加并勾选点播源', 'warning');
+      window.dispatchEvent(new CustomEvent('kongwotv:open-settings'));
+      return;
+    }
+    if (query === urlQuery) {
+      void searchQuery.refetch();
       return;
     }
     router.push(`/?s=${encodeURIComponent(query)}`, { scroll: false });
@@ -147,8 +179,8 @@ function HomeContent() {
     [streamedOutcomes]
   );
   const list = useMemo(
-    () => searchQuery.data?.list ?? (isSearching ? streamedList : []),
-    [searchQuery.data, isSearching, streamedList]
+    () => searchQuery.data?.list ?? streamedList,
+    [searchQuery.data, streamedList]
   );
   const failures =
     searchQuery.data?.failures ??
@@ -161,238 +193,153 @@ function HomeContent() {
   // 分批渲染：新一次搜索（groups 变化）时重置回首批
   const [visibleCount, setVisibleCount] = useState(RESULT_PAGE_SIZE);
   const visibleGroups = useMemo(() => groups.slice(0, visibleCount), [groups, visibleCount]);
-  useEffect(() => setVisibleCount(RESULT_PAGE_SIZE), [groups]);
+  // A history entry remembers how many search cards were loaded; Back must not collapse to page one.
+  useEffect(() => {
+    const saved = readNavigationEntry()?.data.homeVisibleCount;
+    setVisibleCount(typeof saved === 'number' && saved >= RESULT_PAGE_SIZE ? saved : RESULT_PAGE_SIZE);
+  }, [urlQuery]);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-
-      <main className="relative flex-1 max-w-6xl w-full mx-auto px-4 py-6">
-        {/* 首屏氛围渐变 */}
-        {!urlQuery && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-[420px] -z-10"
-            style={{
-              background:
-                'radial-gradient(60% 60% at 50% 0%, rgba(35,173,229,0.10) 0%, rgba(35,173,229,0.03) 45%, transparent 75%)',
-            }}
-          />
+    <div className="tv-cinema-root tv-catalog-root min-h-screen flex flex-col">
+      <Header activePage={urlQuery ? null : category === 'all' ? 'home' : category} />
+      <main id="main-content" tabIndex={-1} className="tv-home-main tv-catalog-main flex-1">
+        {urlQuery && (
+          <div className="tv-page-heading">
+            <div className="tv-page-heading__eyebrow">发现你的下一部好故事</div>
+            <h1>搜索结果</h1>
+          </div>
         )}
 
-        {/* 搜索区 */}
-        <section className={cn('flex flex-col items-center', urlQuery ? 'mb-6' : 'mt-8 mb-8')}>
-          {!urlQuery && (
-            <header className="text-center mb-6">
-              <h1 className="text-4xl sm:text-5xl font-bold brand-gradient">LibreTV</h1>
-            </header>
-          )}
-          {urlQuery && <h1 className="sr-only">LibreTV 视频搜索</h1>}
-          {/* 定位容器比胶囊宽一圈：浮层按它的宽度对齐，接缝处不会与胶囊边框错位 1px */}
-          <div ref={searchHistory.containerRef} className="relative w-full max-w-2xl">
-            <form
-              className="w-full"
-              onSubmit={(e) => {
-                e.preventDefault();
-                runSearch(input);
-              }}
-            >
-              {/* 输入框与搜索按钮合并为一个胶囊：内部无边框，焦点态由容器统一表达；
-                  下拉展开时改为「上圆下直」并隐去底边，与下方浮层拼成同一个面板 */}
-              <div
-                className={cn(
-                  // 12px 圆角矩形（非胶囊）：收起态与展开态共用同一组上圆角，
-                  // 展开时输入框这部分形状完全不发生变化，上下圆角也与下拉保持一致；
-                  // 右侧与上下不留内边距，由搜索按钮拉伸填满、与搜索框边缘贴合
-                  'flex items-stretch min-h-12 pl-4 border',
-                  'transition-[background-color,border-color,border-radius] duration-200',
-                  searchHistory.visible
-                    ? // 展开时：外框（含上圆角）沿用输入框的聚焦样式不变，只把底边改为内部分隔线，
-                      // 使输入区在展开状态下仍是边界清晰的独立输入框，而非与列表糊成一片
-                      'rounded-t-xl rounded-b-none border-accent border-b-line bg-surface-raised'
-                    : 'rounded-xl border-line bg-chip focus-within:border-accent focus-within:ring-1 focus-within:ring-accent/40'
-                )}
-              >
+        {urlQuery && <section className={cn('tv-search-dock', 'tv-search-dock--browse')} aria-label="影视搜索">
+          <div ref={searchHistory.containerRef} className="relative w-full min-w-0">
+            <form className="w-full" onSubmit={(event) => { event.preventDefault(); runSearch(input); }}>
+              <div className={cn('tv-search-field', searchHistory.visible && 'tv-search-field--open')}>
+                <Icon name="search" className="tv-search-field__icon" />
                 <input
                   ref={inputRef}
                   className="flex-1 min-w-0 pr-2 bg-transparent text-sm text-content placeholder:text-faint focus:outline-none"
-                  placeholder="输入影片名称..."
+                  placeholder="搜索电影、电视剧或纪录片"
                   value={input}
                   maxLength={100}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    searchHistory.resetActive();
-                  }}
+                  onChange={(event) => { setInput(event.target.value); searchHistory.resetActive(); }}
                   onFocus={searchHistory.onFocus}
-                  onKeyDown={(e) => searchHistory.onKeyDown(e, pickHistory)}
+                  onKeyDown={(event) => searchHistory.onKeyDown(event, pickHistory)}
                   role="combobox"
                   aria-label="搜索影片"
                   aria-expanded={searchHistory.visible}
                   aria-controls="home-search-history"
                   aria-autocomplete="list"
-                  aria-activedescendant={
-                    searchHistory.visible && searchHistory.activeIndex >= 0
-                      ? `home-search-history-${searchHistory.activeIndex}`
-                      : undefined
-                  }
+                  aria-activedescendant={searchHistory.visible && searchHistory.activeIndex >= 0 ? `home-search-history-${searchHistory.activeIndex}` : undefined}
                 />
                 {input && (
-                  <button
-                    type="button"
-                    className="shrink-0 self-center mr-1 p-1.5 rounded-full text-faint hover:text-content hover:bg-hover transition-colors"
-                    onClick={() => {
-                      setInput('');
-                      searchHistory.resetActive();
-                      inputRef.current?.focus();
-                    }}
-                    aria-label="清空"
-                  >
+                  <button type="button" className="shrink-0 self-center mr-1 p-1.5 rounded-full text-faint hover:text-content hover:bg-hover transition-colors" onClick={() => { setInput(''); searchHistory.resetActive(); inputRef.current?.focus(); }} aria-label="清空">
                     <Icon name="close" className="w-4 h-4" />
                   </button>
                 )}
-                {/* 主操作按钮：贴合搜索框右端——右侧圆角跟随容器、左侧直角，展开时右下角
-                    跟着容器一起改直角；按压改用亮度反馈（缩放会让贴合边缘露出缝隙） */}
-                <button
-                  type="submit"
-                  className={cn(
-                    'btn-primary shrink-0 px-4 font-medium transition-[background-color,filter] active:brightness-90',
-                    '!rounded-l-none',
-                    searchHistory.visible ? '!rounded-tr-xl !rounded-br-none' : '!rounded-r-xl'
-                  )}
-                >
-                  <Icon name="search" className="w-4 h-4" />
-                  搜索
-                </button>
+                <button type="submit" className="tv-search-field__submit">搜索</button>
               </div>
             </form>
-
-            {/* 最近搜索：与输入框无缝拼接；浮层不占文档流，出现/消失不会顶动下方内容 */}
             {searchHistory.visible && (
-              <SearchHistoryDropdown
-                id="home-search-history"
-                matches={searchHistory.matches}
-                activeIndex={searchHistory.activeIndex}
-                onPick={pickHistory}
-                onRemove={searchHistory.remove}
-                onClearAll={searchHistory.clearAll}
-              />
+              <SearchHistoryDropdown id="home-search-history" matches={searchHistory.matches} activeIndex={searchHistory.activeIndex} onPick={pickHistory} onRemove={searchHistory.remove} onClearAll={searchHistory.clearAll} />
             )}
           </div>
-        </section>
+        </section>}
 
-        {/* 搜索结果 */}
         {urlQuery && (
-          <section aria-label="搜索结果" className="mb-10">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm text-muted">
-                “<span className="text-content">{urlQuery}</span>” 的搜索结果
-                {isSearching ? (
-                  <span className="text-faint">
-                    （已就绪 {streamedOutcomes.length}/{selectedSources.length} 个源…）
-                  </span>
-                ) : (
-                  searchQuery.data && (
-                    <span className="text-faint">
-                      （{groups.length} 部影片 · {list.length} 条结果{failures.length > 0 && `，${failures.length} 个源失败`}）
-                    </span>
-                  )
-                )}
+          <section aria-label="搜索结果" className="mb-12">
+            <div className="tv-results-heading">
+              <h2>
+                “{urlQuery}”
+                <span className="tv-results-summary">
+                  {isSearching
+                    ? `正在搜索 · ${streamedOutcomes.length}/${selectedSources.length} 个来源已就绪`
+                    : searchQuery.data ? `${groups.length} 部影片 · ${list.length} 个播放结果` : ''}
+                </span>
               </h2>
             </div>
-
             {failures.length > 0 && (
-              <div className="mb-3 text-xs bg-chip rounded-lg px-3 py-2 flex flex-wrap gap-x-3 gap-y-1">
-                <span className="text-faint">{isSearching ? '以下源暂时无响应：' : '部分点播源请求失败：'}</span>
-                {failures.map((f) => (
-                  <span key={f.sourceKey} className={f.timedOut ? 'text-warning' : 'text-faint'}>
-                    {f.timedOut ? '⏱' : '✗'} {sourceName(f.sourceKey)}
-                    {f.timedOut ? ' 超时' : ''}
-                  </span>
-                ))}
+              <div className="tv-source-notice mb-4 text-xs px-4 py-3 flex flex-wrap gap-x-3 gap-y-1">
+                <span className="text-muted">{isSearching ? '以下来源暂时无响应：' : '部分来源暂不可用：'}</span>
+                {failures.map((failure) => <span key={failure.sourceKey} className={failure.timedOut ? 'text-warning' : 'text-faint'}>{sourceName(failure.sourceKey)}{failure.timedOut ? ' · 超时' : ''}</span>)}
               </div>
             )}
-
             {disabledSources.length > 0 && (
-              <div className="mb-3 text-xs text-faint bg-chip rounded-lg px-3 py-2">
-                {disabledSources.length} 个源因连续超时/失败已暂停参与搜索（临时停用的到期自动恢复，
-                长期停用的需在设置中手动恢复）：{disabledSources.map((key) => sourceName(key)).join('、')}
+              <div className="tv-source-notice mb-4 text-xs text-muted px-4 py-3 leading-relaxed">
+                {disabledSources.length} 个来源因连续超时或失败已暂停搜索：{disabledSources.map((key) => sourceName(key)).join('、')}。临时停用的会自动恢复，也可以在设置中恢复。
               </div>
             )}
-
             {offSubscriptionSources.length > 0 && (
-              <div className="mb-3 text-xs text-faint bg-chip rounded-lg px-3 py-2">
-                {offSubscriptionSources.length} 个源所属的订阅已停用，未参与本次搜索（在设置 → 数据源订阅中可重新启用）：
-                {offSubscriptionSources.map((key) => sourceName(key)).join('、')}
+              <div className="tv-source-notice mb-4 text-xs text-muted px-4 py-3 leading-relaxed">
+                {offSubscriptionSources.length} 个来源的订阅已关闭，未参与这次搜索：{offSubscriptionSources.map((key) => sourceName(key)).join('、')}。可以在设置中重新启用。
               </div>
             )}
-
+            {searchQuery.isError && selectedSources.length > 0 && (
+              <div className="tv-source-notice mb-5 px-5 py-4" role="alert">
+                <p className="text-sm text-content">搜索未完成{list.length ? '，已找到的结果仍可使用' : ''}。</p>
+                <p className="mt-1 text-sm text-muted">请检查网络后重试，或在设置中检查播放来源。</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn-ghost" onClick={() => void searchQuery.refetch()} disabled={searchQuery.isFetching}>重新搜索</button>
+                  <button type="button" className="btn-ghost" onClick={() => window.dispatchEvent(new CustomEvent('kongwotv:open-settings'))}>管理播放源</button>
+                </div>
+              </div>
+            )}
             {selectedSources.length === 0 ? (
               <NoSourceGuide hasSources={customAPIs.length > 0 || envSources.length > 0} />
             ) : list.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
-                  {visibleGroups.map((group) => (
-                    <AggregatedCard
-                      key={group.key}
-                      group={group}
-                      onOpen={(item) => setDetailItem(item)}
-                    />
-                  ))}
+                <div className="tv-results-grid">
+                  {visibleGroups.map((group) => <AggregatedCard key={group.key} group={group} onOpen={openResult} />)}
                 </div>
                 {groups.length > visibleCount && (
-                  <div className="flex justify-center mt-4">
-                    <button
-                      className="btn-ghost btn-sm"
-                      onClick={() => setVisibleCount((v) => v + RESULT_PAGE_SIZE)}
-                    >
-                      加载更多（还有 {groups.length - visibleCount} 部）
-                    </button>
+                  <div className="flex justify-center mt-9">
+                    <button className="btn-ghost" onClick={() => setVisibleCount((value) => value + RESULT_PAGE_SIZE)}>加载更多 · 还有 {groups.length - visibleCount} 部</button>
                   </div>
                 )}
               </>
-            ) : isSearching ? (
-              <ResultsSkeleton />
-            ) : (
-              <EmptyState
-                icon="search"
-                title="没有找到匹配的结果"
-                description="请尝试其他关键词或更换点播源"
-                className="!py-16"
-              />
+            ) : isSearching ? <ResultsSkeleton /> : !searchQuery.isError && (
+              <EmptyState icon="search" title={failures.length >= selectedSources.length ? '播放来源暂不可用' : '没有找到这个故事'} description={failures.length >= selectedSources.length ? '本次来源均未成功响应，请重试或检查来源设置。' : '试试完整片名，或换个关键词再找找。'} className="!py-16" action={<><button type="button" className="btn-ghost" onClick={() => void searchQuery.refetch()}>重新搜索</button><button type="button" className="btn-ghost" onClick={() => window.dispatchEvent(new CustomEvent('kongwotv:open-settings'))}>管理播放源</button></>} />
             )}
           </section>
         )}
 
-        {/* 首页推荐（有搜索时隐藏） */}
         {!urlQuery && (
-          <RecommendSection
-            onPick={(title) => {
-              setInput(title);
-              runSearch(title);
-            }}
-          />
+          <>
+            {browsing ? <DiscoveryFeed filters={defaultDiscoveryFilters(category)} onOpen={openCatalog} /> : (
+              <>
+                <div className="tv-home-heading"><div><p>幕里</p><h1>立即观看</h1></div><span>总有一个故事，值得此刻。</span></div>
+                <FeaturedPremiere onOpen={openCatalog} />
+                <ContinueWatchingSection />
+                <RankingSection onOpen={openCatalog} />
+                <WatchlistSection onOpen={openCatalog} />
+                <LiveRibbon />
+              </>
+            )}
+            {!browsing && supplementalEnabled && <div className="tv-catalog-supplemental"><RecommendSection onPick={(title) => { setInput(title); runSearch(title); }} /></div>}
+          </>
         )}
       </main>
-
       <SiteFooter />
-
-      <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
+      <DetailModal
+        item={detailItem}
+        catalogItem={catalogItem}
+        relatedItems={relatedItems}
+        navigationId={detailNavigation.layer?.id}
+        onPickRelated={openCatalog}
+        onClose={detailNavigation.close}
+        onSearch={(title) => { setInput(title); router.push(`/?s=${encodeURIComponent(title)}`, { scroll: false }); searchHistory.record(title); }}
+      />
     </div>
   );
 }
 
 function ResultsSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        // 结构对齐真实结果卡（左侧缩略图 + 右侧文字块），避免占位与真实卡片形状不符
-        <div key={i} className="card flex h-28 overflow-hidden">
-          <div className="w-[105px] sm:w-[120px] shrink-0 bg-chip animate-pulse" />
-          <div className="flex-1 p-2.5 space-y-2">
-            <div className="h-4 w-3/4 rounded bg-chip animate-pulse" />
-            <div className="h-3 w-1/2 rounded bg-chip animate-pulse" />
-            <div className="h-3 w-full rounded bg-chip animate-pulse" />
-          </div>
+    <div className="tv-results-grid" aria-label="正在加载搜索结果" aria-busy="true">
+      {Array.from({ length: 12 }).map((_, index) => (
+        <div key={index} className="space-y-3">
+          <div className="aspect-[2/3] rounded-2xl bg-chip animate-pulse" />
+          <div className="h-3.5 w-3/4 rounded bg-chip animate-pulse" />
+          <div className="h-2.5 w-1/2 rounded bg-chip animate-pulse" />
         </div>
       ))}
     </div>
@@ -403,18 +350,17 @@ function ResultsSkeleton() {
 function NoSourceGuide({ hasSources = false }: { hasSources?: boolean }) {
   return (
     <div className="border border-dashed border-line rounded-xl p-10 text-center max-w-lg mx-auto">
-      <h3 className="text-content font-medium mb-2">{hasSources ? '尚未勾选点播源' : '先添加一个点播源'}</h3>
+      <h3 className="text-content font-medium mb-2">{hasSources ? '当前没有可用的点播源' : '先添加一个点播源'}</h3>
       <p className="text-sm text-muted leading-relaxed">
         {hasSources ? (
-          <>点击右上角「设置」，勾选要参与搜索的点播源后重新搜索。</>
+          <>在设置中勾选播放源，或恢复已暂停的来源及订阅，再重新搜索。</>
         ) : (
           <>
-            LibreTV 不内置任何采集站。点击右上角「设置 → 添加 API」，填入一个
-            Apple CMS 采集站地址（如 <code className="text-accent text-xs">https://example.com/api.php/provide/vod</code>），
-            勾选后即可开始搜索。
+            在「设置 → 源管理」添加播放源或导入订阅，勾选后即可搜索影片。
           </>
         )}
       </p>
+      <button type="button" className="btn-ghost mt-5" onClick={() => window.dispatchEvent(new CustomEvent('kongwotv:open-settings'))}>{hasSources ? '管理播放源' : '添加播放源'}</button>
     </div>
   );
 }

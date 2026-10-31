@@ -24,9 +24,15 @@ export type IconName =
   | 'link'
   | 'alert'
   | 'gear'
-  | 'home';
+  | 'home'
+  | 'back'
+  | 'play'
+  | 'film';
 
 const PATHS: Record<IconName, ReactNode> = {
+  back: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M20 12H4m7-7-7 7 7 7" />,
+  play: <path fill="currentColor" stroke="none" d="M7 4.5a1 1 0 0 1 1.5-.86l12 7.5a1 1 0 0 1 0 1.72l-12 7.5A1 1 0 0 1 7 19.5Z" />,
+  film: <><rect x="3" y="3" width="18" height="18" rx="3" strokeWidth={1.5} /><path d="M7 3v18M17 3v18M3 8h4m10 0h4M3 16h4m10 0h4" strokeWidth={1.5} /></>,
   close: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />,
   edit: (
     <path

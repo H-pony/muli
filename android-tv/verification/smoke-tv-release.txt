@@ -1,0 +1,7 @@
+INSTRUMENTATION_RESULT: checks=application_label,visible_brand,screenshot_home,dpad_navigation_1,live_navigation,screenshot_live,dpad_navigation_2,search_input,screenshot_search,screenshot_details,responsive_details,decoded_video_playback,ascii_kongwotv_http_user_agent,pause_control,seek_control,screenshot_episodes,episode_switch,screenshot_player
+INSTRUMENTATION_RESULT: stream=PASS tv [application_label, visible_brand, screenshot_home, dpad_navigation_1, live_navigation, screenshot_live, dpad_navigation_2, search_input, screenshot_search, screenshot_details, responsive_details, decoded_video_playback, ascii_kongwotv_http_user_agent, pause_control, seek_control, screenshot_episodes, episode_switch, screenshot_player]
+
+INSTRUMENTATION_CODE: -1
+s_glBindAttribLocation: bind attrib 0 name position
+s_glBindAttribLocation: bind attrib 1 name color
+s_glBindAttribLocation: bind attrib 2 name localCoord

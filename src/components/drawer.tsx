@@ -1,8 +1,10 @@
 'use client';
 
+import { useBodyScrollLock } from './use-body-scroll-lock';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Icon } from './icon';
+import { isTopFocusLayer, useFocusTrap } from './use-focus-trap';
 
 /**
  * 通用右侧抽屉骨架：
@@ -14,10 +16,6 @@ import { Icon } from './icon';
 
 /** 退出过渡时长，需与下方 duration-200 保持一致 */
 const EXIT_MS = 200;
-
-/** 抽屉内可聚焦元素选择器 */
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Drawer({
   open,
@@ -46,7 +44,7 @@ export function Drawer({
   const [entered, setEntered] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  useFocusTrap(open && mounted, panelRef);
 
   // 切换面板时滚回顶部：新面板不应继承上一个面板的滚动位置
   useEffect(() => {
@@ -57,7 +55,6 @@ export function Drawer({
   // 退出：先回到初态，过渡结束后卸载并归还焦点
   useEffect(() => {
     if (open) {
-      restoreFocusRef.current = document.activeElement as HTMLElement | null;
       setMounted(true);
       const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
       return () => cancelAnimationFrame(raf);
@@ -65,77 +62,32 @@ export function Drawer({
     setEntered(false);
     const timer = setTimeout(() => {
       setMounted(false);
-      restoreFocusRef.current?.focus?.();
-      restoreFocusRef.current = null;
     }, EXIT_MS);
     return () => clearTimeout(timer);
   }, [open]);
 
   // 打开期间锁定背景滚动（移动端可避免滚动穿透）
-  useEffect(() => {
-    if (!mounted) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [mounted]);
+  useBodyScrollLock(mounted);
 
-  // 打开后把焦点移入抽屉，保证键盘用户不从背景页开始
+  // Only the topmost dialog handles dismissal; confirmations keep their own focus.
   useEffect(() => {
-    if (!mounted) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const first = panel.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? panel).focus();
-  }, [mounted]);
-
-  // Esc 关闭 + Tab 循环（焦点不逃逸到背景页面）
-  useEffect(() => {
-    if (!mounted) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // 抽屉内若有确认弹窗等上层对话框（role=alertdialog），Esc 交给它处理，避免一并关闭抽屉
-        if (document.querySelector('[role="alertdialog"]')) return;
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const nodes = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.getClientRects().length > 0 || el === document.activeElement
-      );
-      if (nodes.length === 0) {
-        e.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || !panel.contains(active)) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else if (active === last || !panel.contains(active)) {
-        e.preventDefault();
-        first.focus();
-      }
+    if (!open || !mounted) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !isTopFocusLayer(panelRef.current)) return;
+      event.preventDefault();
+      onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [mounted, onClose]);
+  }, [open, mounted, onClose]);
 
   if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="tv-drawer fixed inset-0 z-50">
       <div
         className={cn(
-          'absolute inset-0 bg-black/60 transition-opacity duration-200',
+          'tv-drawer__backdrop absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none',
           entered ? 'opacity-100' : 'opacity-0'
         )}
         onClick={closeOnOverlay ? onClose : undefined}
@@ -148,25 +100,30 @@ export function Drawer({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'absolute right-0 top-0 h-full w-full bg-surface-raised border-l border-line flex flex-col outline-none',
-          'transition-transform duration-200 ease-out',
+          'tv-drawer__panel absolute inset-y-3 right-3 flex w-[calc(100%-1.5rem)] flex-col rounded-[1.75rem] border border-line/70 bg-surface text-content shadow-[0_24px_100px_rgba(0,0,0,0.4)] outline-none sm:inset-y-5 sm:right-5 sm:w-[calc(100%-2.5rem)]',
+          'transition-transform duration-200 ease-out motion-reduce:transition-none',
           width,
-          entered ? 'translate-x-0' : 'translate-x-full'
+          entered ? 'translate-x-0' : 'translate-x-[calc(100%+1.5rem)] sm:translate-x-[calc(100%+2.5rem)]'
         )}
       >
-        <div className="shrink-0 px-4 py-2.5 border-b border-line flex items-center justify-between">
-          <h2 className="font-semibold text-content">{title}</h2>
+        <div className="tv-drawer__header flex shrink-0 items-center justify-between gap-4 border-b border-line/60 px-6 pb-5 pt-6 sm:px-7 sm:pt-7">
+          <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-content">{title}</h2>
           <button
-            className="p-1.5 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+            type="button"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chip text-muted transition-colors hover:bg-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             onClick={onClose}
             aria-label="关闭"
           >
             <Icon name="close" />
           </button>
         </div>
-        {subheader && <div className="shrink-0 px-4 py-2.5 border-b border-line bg-surface-raised">{subheader}</div>}
+        {subheader && (
+          <div className="tv-drawer__subheader shrink-0 border-b border-line/60 bg-surface px-6 py-5 sm:px-7">
+            {subheader}
+          </div>
+        )}
         {/* 唯一滚动区：内容再长也只在这一层滚动，避免与列表内滚形成嵌套滚动 */}
-        <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-4 pt-4 pb-6">
+        <div ref={contentRef} className="tv-drawer__content min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-6 scrollbar-thin sm:px-7">
           {children}
         </div>
       </div>

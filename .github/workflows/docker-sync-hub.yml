@@ -2,14 +2,13 @@ name: docker-sync-hub
 
 # 镜像标签对齐/补救工具：以**当前仓库** GHCR 包上某个版本 tag 的 digest 为源，
 # 把「主.次」与 latest 标签在 GHCR 侧补齐，并在配置了 Docker Hub 凭据的仓库
-# 同步到 docker.io/bestzwei/libretv，最后逐一校验一致。
+# 同步到自己配置的 Docker Hub 镜像仓库，最后逐一校验一致。
 # 不重新构建，纯 registry 元数据操作，几秒完成。
 # 用途：
 # - 主流程 merge 打标签不完整时的补救（如 v2.12.5/v2.12.6 只打上了版本号 tag）；
 # - 两个 registry 标签不一致时的手动对齐。
-# 注意：GHCR 源跟随触发仓库——在 bestZwei/LibreTV-Next 触发修
-# ghcr.io/bestzwei/libretv-next，在 LibreSpark/LibreTV 触发修
-# ghcr.io/librespark/libretv（并连带 Docker Hub）。两个仓库按需分别触发。
+# GHCR 源统一为当前仓库所有者的 kongwotv 包。
+# Docker Hub 同步目标通过仓库变量 DOCKERHUB_IMAGE 显式配置。
 
 on:
   workflow_dispatch:
@@ -24,14 +23,14 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  DOCKERHUB_IMAGE: docker.io/bestzwei/libretv
+  DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     env:
       # Docker Hub 凭据仅在配置了的仓库（upstream）存在；fork 仓库跳过 DH 侧
-      HAS_DOCKERHUB_CREDS: ${{ secrets.DOCKER_PASSWORD != '' }}
+      HAS_DOCKERHUB_CREDS: ${{ secrets.DOCKER_PASSWORD != '' && vars.DOCKERHUB_IMAGE != '' }}
     steps:
       - uses: docker/setup-buildx-action@v3
 
@@ -52,7 +51,7 @@ jobs:
 
       - name: 以版本 digest 为源补齐标签
         run: |
-          ghcr_image="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          ghcr_image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/kongwotv"
           version="${{ inputs.tag }}"
           version="${version#v}"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -84,7 +83,7 @@ jobs:
 
       - name: 校验全部标签 digest 一致
         run: |
-          ghcr_image="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          ghcr_image="${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/kongwotv"
           version="${{ inputs.tag }}"
           version="${version#v}"
           minor="${version%.*}"

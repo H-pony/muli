@@ -24,12 +24,13 @@ import type { SourceConfig } from '@/lib/types';
 import { useToast } from './toast';
 import { formatRelativeTime, hostnameOf, validateSourceUrl, cn } from '@/lib/utils';
 import { exportConfig, importConfig } from '@/lib/db';
-import { PERSIST_KEY } from '@/lib/persist-storage';
+import { configSettings, isSupportedConfigName, readBrandStorage } from '@/lib/brand';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from './auth';
 import { api } from '@/lib/client-api';
 import { syncSourceSubscription } from '@/lib/subscription-sync';
 import { describeParseStats } from '@/lib/tvbox-parser';
+import { ArtworkSettings } from './artwork-settings';
 
 /**
  * 设置抽屉：顶部两级导航。
@@ -55,13 +56,13 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
   ],
   prefs: [
     { id: 'playback', label: '播放与过滤' },
-    { id: 'image', label: '封面图加载' },
+    { id: 'image', label: '图片与背景' },
     { id: 'home', label: '首页与内容' },
   ],
   data: [{ id: 'io', label: '配置导入导出' }],
 };
 
-const TAB_STORAGE_KEY = 'libretv-settings-tab';
+const TAB_STORAGE_KEY = 'kongwotv-settings-tab';
 
 export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [primary, setPrimary] = useState<PrimaryTab>('sources');
@@ -74,7 +75,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
   // 挂载后读取上次位置（不在渲染期读 localStorage，避免 SSR/hydration 不一致）
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(TAB_STORAGE_KEY);
+      const raw = readBrandStorage(TAB_STORAGE_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw) as {
         primary?: PrimaryTab;
@@ -105,6 +106,16 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       /* 隐私模式等无法写入时忽略 */
     }
   }, [primary, secondary]);
+
+  useEffect(() => {
+    const openRequestedSection = (event: Event) => {
+      if ((event as CustomEvent<{ section?: string }>).detail?.section !== 'live') return;
+      setPrimary('sources');
+      setSecondary((previous) => ({ ...previous, sources: 'live' }));
+    };
+    window.addEventListener('kongwotv:open-settings', openRequestedSection);
+    return () => window.removeEventListener('kongwotv:open-settings', openRequestedSection);
+  }, []);
 
   const current = secondary[primary];
 
@@ -163,7 +174,7 @@ function TabRow<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={cn('flex w-full gap-1', variant === 'primary' && 'p-0.5 bg-chip rounded-lg')}
+      className={cn('tv-settings-tabs flex w-full gap-1', variant === 'primary' && 'p-0.5 bg-chip rounded-lg')}
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight') {
           e.preventDefault();
@@ -563,8 +574,8 @@ function PlaybackPanel() {
       <SectionTitle title="播放与过滤" />
       <div className="space-y-3">
         <ToggleRow
-          label="广告切片过滤"
-          description="剔除播放列表中的广告分片段落（按分片 URL 特征、片头插入与长片间超短中插识别，不动 DISCONTINUITY 时间轴）"
+          label="跳过插播广告"
+          description="自动识别并跳过部分插播广告；如出现内容缺失或播放异常，可关闭后重试。"
           checked={store.adFilter}
           onChange={(v) => store.updateSettings({ adFilter: v })}
         />
@@ -603,8 +614,8 @@ function VideoCachePanel() {
   return (
     <div className="space-y-3 pt-3 mt-3 border-t border-line">
       <ToggleRow
-        label="片段本地缓存"
-        description="暂停或观看时把后续分片缓存到浏览器本地，二次播放与断网卡顿时直接命中（存储于本机，不计入配置导出）"
+        label="视频本地缓存"
+        description="提前缓存后续视频内容，减少重复加载和卡顿。仅保存在本机，可随时清理。"
         checked={enabled}
         onChange={(v) => {
           const next = saveCacheSettings({ enabled: v });
@@ -642,23 +653,26 @@ function ImagePanel() {
     custom: '使用你填写的模板转发封面图',
   };
   return (
-    <section>
-      <SectionTitle title="封面图加载" />
-      <div className="space-y-2">
-        <SelectRow
-          label="加载方式"
-          value={mode}
-          description={description[mode]}
-          onChange={(v) => store.updateSettings({ imageProxyMode: v as 'direct' | 'proxy' | 'custom' })}
-          options={[
-            { value: 'direct', label: '直连优先', hint: '最省服务器流量' },
-            { value: 'proxy', label: '内置代理', hint: '最稳定' },
-            { value: 'custom', label: '自定义', hint: '自建转发模板' },
-          ]}
-        />
-        {mode === 'custom' && <CustomProxyInput />}
-      </div>
-    </section>
+    <div className="space-y-7">
+      <section>
+        <SectionTitle title="封面图加载" />
+        <div className="space-y-2">
+          <SelectRow
+            label="加载方式"
+            value={mode}
+            description={description[mode]}
+            onChange={(v) => store.updateSettings({ imageProxyMode: v as 'direct' | 'proxy' | 'custom' })}
+            options={[
+              { value: 'direct', label: '直连优先', hint: '最省服务器流量' },
+              { value: 'proxy', label: '内置代理', hint: '最稳定' },
+              { value: 'custom', label: '自定义', hint: '自建转发模板' },
+            ]}
+          />
+          {mode === 'custom' && <CustomProxyInput />}
+        </div>
+      </section>
+      <ArtworkSettings />
+    </div>
   );
 }
 
@@ -704,19 +718,19 @@ function HomePanel() {
           onChange={(v) => store.updateSettings({ yellowFilter: v })}
         />
         <ToggleRow
-          label="首页推荐"
-          description="在首页展示推荐内容"
+          label="补充推荐"
+          description="排行榜始终展示，可额外显示分类推荐或新番放送"
           checked={store.doubanEnabled}
           onChange={(v) => store.updateSettings({ doubanEnabled: v })}
         />
         <SelectRow
-          label="推荐数据源"
+          label="补充内容"
           value={store.recommendSource}
           onChange={(v) => store.updateSettings({ recommendSource: v as 'douban' | 'bangumi' | 'hot-list' })}
           options={[
             { value: 'douban', label: '豆瓣', hint: '热门电影与剧集' },
             { value: 'bangumi', label: 'Bangumi', hint: '每日新番放送（免 key）' },
-            { value: 'hot-list', label: '影视榜单', hint: '豆瓣周榜 / 百度热播' },
+            { value: 'hot-list', label: '仅排行榜', hint: '电影 / 电视剧 / 综艺' },
           ]}
         />
       </div>
@@ -728,7 +742,7 @@ function HomePanel() {
 
 /**
  * 数据源订阅 / 分享：
- * - 订阅：填入远程订阅地址（LibreTV-SourceList JSON 或 TVBOX 配置 JSON，由服务端自动识别），
+ * - 订阅：填入远程订阅地址（幕里-SourceList JSON 或 TVBOX 配置 JSON，由服务端自动识别），
  *   一次拉取点播源与直播源，可随时重新同步；
  * - 分享：把当前点播源 + 直播源导出为同格式 JSON 文件，托管到任意位置即可被他人订阅。
  */
@@ -812,7 +826,7 @@ function SourceSubscriptions() {
 
     setPublishing(true);
     try {
-      const result = await api.publishSourceList({ name: 'LibreTV-SourceList', sources, liveSources });
+      const result = await api.publishSourceList({ name: '幕里-SourceList', sources, liveSources });
       setPublished(result);
       toast(`已发布 ${result.sources} 个点播源、${result.liveSources} 个直播源到 ${result.provider}`, 'success');
     } catch (err) {
@@ -851,12 +865,12 @@ function SourceSubscriptions() {
       })
       .map(({ name, url, epg }) => ({ name: name || hostnameOf(url), url, epg }));
 
-    const payload = { name: 'LibreTV-SourceList', version: 2, exportedAt: Date.now(), sources, liveSources };
+    const payload = { name: '幕里-SourceList', version: 2, exportedAt: Date.now(), sources, liveSources };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `LibreTV-SourceList_${Date.now()}.json`;
+    a.download = `幕里-SourceList_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast(`已导出 ${sources.length} 个点播源、${liveSources.length} 个直播源，托管后即可被他人订阅`, 'success');
@@ -932,7 +946,7 @@ function SourceSubscriptions() {
       <div className="flex gap-2 mb-2">
         <input
           className="input flex-1 min-w-0"
-          placeholder="订阅地址（LibreTV 源列表或 TVBOX 配置的 JSON URL）"
+          placeholder="订阅地址（幕里 源列表或 TVBOX 配置的 JSON URL）"
           value={subUrl}
           onChange={(e) => setSubUrl(e.target.value)}
           onKeyDown={(e) => {
@@ -949,7 +963,7 @@ function SourceSubscriptions() {
       </div>
       {store.subscriptions.length === 0 ? (
         <p className="text-xs text-faint">
-          一份订阅可同时下发点播源与直播源，支持 LibreTV 源列表与 TVBOX 配置（仅导入可直接使用的接口，Spider 类站点自动跳过）；
+          一份订阅可同时下发点播源与直播源，支持 幕里 源列表与 TVBOX 配置（仅导入可直接使用的接口，Spider 类站点自动跳过）；
           「导出数据源」生成的 JSON 托管到任意 URL 即可分享给他人订阅。
         </p>
       ) : (
@@ -1083,7 +1097,7 @@ function ConfigIoPanel() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `LibreTV-Settings_${Date.now()}.json`;
+      a.download = `幕里-Settings_${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast('配置已导出', 'success');
@@ -1157,10 +1171,10 @@ function summarizeConfig(text: string): string {
   } catch {
     throw new Error('文件不是合法的 JSON');
   }
-  if (cfg.name !== 'LibreTV-Settings') throw new Error('不是 LibreTV 的配置文件');
+  if (!isSupportedConfigName(cfg.name)) throw new Error('不是 幕里 的配置文件');
 
   const parts: string[] = [];
-  const settingsRaw = cfg.data?.[PERSIST_KEY];
+  const settingsRaw = configSettings(cfg.data);
   if (typeof settingsRaw === 'string') {
     try {
       const state = (JSON.parse(settingsRaw) as { state?: Record<string, unknown> }).state ?? {};

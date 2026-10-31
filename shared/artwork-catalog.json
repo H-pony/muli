@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-10-21",
+  "items": [
+    {
+      "mediaType": "movie",
+      "tmdbId": 531428,
+      "imdbId": "tt8613070",
+      "doubanId": "30257175",
+      "year": "2019",
+      "titles": ["燃烧女子的肖像", "Portrait of a Lady on Fire", "Portrait de la jeune fille en feu"],
+      "backdropPath": "/ivJ5UzT6IzucLVfbZwCCwiJJoBz.jpg",
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "mediaType": "movie", "tmdbId": 157336, "imdbId": "tt0816692", "doubanId": "1889243", "year": "2014",
+      "titles": ["星际穿越", "星際穿越", "Interstellar"],
+      "backdropPath": "/8sNiAPPYU14PUepFNeSNGUTiHW.jpg", "width": 3840, "height": 2160
+    },
+    {
+      "mediaType": "movie", "tmdbId": 27205, "imdbId": "tt1375666", "doubanId": "3541415", "year": "2010",
+      "titles": ["盗梦空间", "盜夢空間", "Inception"],
+      "backdropPath": "/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg", "width": 3840, "height": 2160
+    },
+    {
+      "mediaType": "movie", "tmdbId": 278, "imdbId": "tt0111161", "doubanId": "1292052", "year": "1994",
+      "titles": ["肖申克的救赎", "肖申克的救贖", "The Shawshank Redemption"],
+      "backdropPath": "/pNjh59JSxChQktamG3LMp9ZoQzp.jpg", "width": 1920, "height": 1080
+    },
+    {
+      "mediaType": "movie", "tmdbId": 842675, "imdbId": "tt13539646", "doubanId": "35267208", "year": "2023",
+      "titles": ["流浪地球2", "流浪地球Ⅱ", "The Wandering Earth II", "The Wandering Earth 2"],
+      "backdropPath": "/94cS0mzODEoNIXFT7nhPcI8V4IJ.jpg", "width": 3840, "height": 2160
+    },
+    {
+      "mediaType": "movie", "tmdbId": 615453, "imdbId": "tt10627720", "doubanId": "26794435", "year": "2019",
+      "titles": ["哪吒之魔童降世", "Ne Zha"],
+      "backdropPath": "/k1pJslKr4aDayw9kWwWnlC3MIP3.jpg", "width": 3840, "height": 2160
+    },
+    {
+      "mediaType": "tv", "tmdbId": 136283, "doubanId": "35314632", "year": "2022",
+      "titles": ["黑暗荣耀", "黑暗榮耀", "黑暗荣耀第一季", "The Glory", "더 글로리"],
+      "backdropPath": "/AjwoDj77HLlqcpwEGqsnvMXm5my.jpg", "width": 3839, "height": 2160
+    },
+    {
+      "mediaType": "movie",
+      "tmdbId": 299534,
+      "imdbId": "tt4154796",
+      "doubanId": "26100958",
+      "year": "2019",
+      "titles": ["复仇者联盟4：终局之战", "复仇者联盟4:终局之战", "Avengers: Endgame"],
+      "backdropPath": "/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+      "width": 3840,
+      "height": 2160
+    }
+  ]
+}

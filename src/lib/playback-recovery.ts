@@ -76,9 +76,16 @@ export class PlaybackRecovery {
   }
 
   /** 致命错误 → 恢复决策 */
-  onFatal(type: string, details: string): RecoveryDecision {
+  onFatal(type: string, details: string, httpStatus?: number): RecoveryDecision {
     if (this.disposed) return { action: 'ignore', reason: '已销毁' };
     this.lastActionAt = Date.now();
+
+    if (type === HLS_ERROR_NETWORK && (httpStatus === 404 || httpStatus === 410)) {
+      return { action: 'switch-source', reason: `当前线路已失效（HTTP ${httpStatus}），请切换线路或播放源` };
+    }
+    if (type === HLS_ERROR_NETWORK && (httpStatus === 401 || httpStatus === 403)) {
+      return { action: 'switch-source', reason: `上游拒绝访问当前线路（HTTP ${httpStatus}），请切换线路或播放源` };
+    }
 
     if (HARD_FAIL_DETAILS.has(details)) {
       return { action: 'switch-source', reason: '播放列表格式无法解析，重试无意义' };

@@ -1,0 +1,5 @@
+.build/
+build-evidence/
+*.xcuserstate
+xcuserdata/
+.DS_Store

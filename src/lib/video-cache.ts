@@ -1,5 +1,6 @@
 import { db } from './db';
 import { documentBaseURI } from './m3u8';
+import { readBrandStorage } from './brand';
 
 /**
  * 视频片段本地缓存层。
@@ -18,7 +19,7 @@ import { documentBaseURI } from './m3u8';
  * 不带基址的 `new URL()` 会原样放过——必须锚到文档基址才与绝对形式收敛为同一个 key。
  */
 
-export const VIDEO_CACHE_NAME = 'libretv-video-v1';
+export const VIDEO_CACHE_NAME = 'kongwotv-video-v1';
 const META_FLUSH_DEBOUNCE_MS = 30_000;
 
 export interface CacheSettings {
@@ -38,7 +39,7 @@ export const DEFAULT_CACHE_SETTINGS: CacheSettings = {
   maxTotalBytes: 2 * 1024 * 1024 * 1024,
 };
 
-const SETTINGS_KEY = 'libretv-video-cache-settings';
+const SETTINGS_KEY = 'kongwotv-video-cache-settings';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -57,7 +58,7 @@ export function normalizeCacheSettings(input: unknown): CacheSettings {
 
 export function loadCacheSettings(): CacheSettings {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = readBrandStorage(SETTINGS_KEY);
     return normalizeCacheSettings(raw ? JSON.parse(raw) : undefined);
   } catch {
     return { ...DEFAULT_CACHE_SETTINGS };
